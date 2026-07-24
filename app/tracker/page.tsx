@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -15,43 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
-const applicationColumns = [
-  {
-    id: "saved",
-    title: "Saved",
-    icon: Clock3,
-    color: "bg-slate-100 text-slate-700",
-    jobs: [mockJobs[0], mockJobs[1]],
-  },
-  {
-    id: "applied",
-    title: "Applied",
-    icon: FileCheck2,
-    color: "bg-sky-50 text-sky-700",
-    jobs: [mockJobs[2]],
-  },
-  {
-    id: "interview",
-    title: "Interview",
-    icon: MessageCircle,
-    color: "bg-purple-50 text-purple-700",
-    jobs: [mockJobs[0]],
-  },
-  {
-    id: "offer",
-    title: "Offer",
-    icon: CheckCircle2,
-    color: "bg-emerald-50 text-emerald-700",
-    jobs: [],
-  },
-  {
-    id: "rejected",
-    title: "Rejected",
-    icon: XCircle,
-    color: "bg-red-50 text-red-700",
-    jobs: [],
-  },
-];
+
 
 function formatSalary(min?: number, max?: number) {
   if (!min && !max) return "Salary not listed";
@@ -65,11 +32,52 @@ function formatSalary(min?: number, max?: number) {
 }
 
 export default function TrackerPage() {
+  const { savedJobIds } = useSavedJobs();
+
+  const savedJobs = mockJobs.filter((job) => savedJobIds.includes(job.id));
+
+  const applicationColumns = [
+    {
+      id: "saved",
+      title: "Saved",
+      icon: Clock3,
+      color: "bg-slate-100 text-slate-700",
+      jobs: savedJobs,
+    },
+    {
+      id: "applied",
+      title: "Applied",
+      icon: FileCheck2,
+      color: "bg-sky-50 text-sky-700",
+      jobs: [mockJobs[2]],
+    },
+    {
+      id: "interview",
+      title: "Interview",
+      icon: MessageCircle,
+      color: "bg-purple-50 text-purple-700",
+      jobs: [mockJobs[0]],
+    },
+    {
+      id: "offer",
+      title: "Offer",
+      icon: CheckCircle2,
+      color: "bg-emerald-50 text-emerald-700",
+      jobs: [],
+    },
+    {
+      id: "rejected",
+      title: "Rejected",
+      icon: XCircle,
+      color: "bg-red-50 text-red-700",
+      jobs: [],
+    },
+  ];
+
   const totalApplications = applicationColumns.reduce(
     (total, column) => total + column.jobs.length,
     0
   );
-
   return (
     <AppShell>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -233,12 +241,12 @@ export default function TrackerPage() {
                               {column.id === "saved"
                                 ? "Review job and prepare application."
                                 : column.id === "applied"
-                                ? "Wait for employer response."
-                                : column.id === "interview"
-                                ? "Prepare interview notes."
-                                : column.id === "offer"
-                                ? "Review offer details."
-                                : "Archive or follow up later."}
+                                  ? "Wait for employer response."
+                                  : column.id === "interview"
+                                    ? "Prepare interview notes."
+                                    : column.id === "offer"
+                                      ? "Review offer details."
+                                      : "Archive or follow up later."}
                             </p>
                           </div>
                         </CardContent>

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import {
   Bookmark,
   BriefcaseBusiness,
@@ -43,14 +44,33 @@ function getRiskColor(risk: string) {
 }
 
 export default function JobsPage() {
+  const { isJobSaved, toggleSavedJob } = useSavedJobs();
+
+  const [searchQuery, setSearchQuery] = useState("");
+
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
   >("All");
 
-  const filteredJobs =
-    workModeFilter === "All"
-      ? mockJobs
-      : mockJobs.filter((job) => job.workMode === workModeFilter);
+  const filteredJobs = mockJobs.filter((job) => {
+    const matchesWorkMode =
+      workModeFilter === "All" || job.workMode === workModeFilter;
+
+    const searchText = [
+      job.title,
+      job.company,
+      job.location,
+      job.source,
+      job.employmentType,
+      ...job.skills,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    const matchesSearch = searchText.includes(searchQuery.toLowerCase());
+
+    return matchesWorkMode && matchesSearch;
+  });
 
   return (
     <AppShell>
@@ -79,6 +99,8 @@ export default function JobsPage() {
           <div className="relative">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <Input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search jobs, companies, or keywords"
               className="h-12 rounded-2xl border-slate-200 pl-12"
             />
@@ -102,8 +124,8 @@ export default function JobsPage() {
                 setWorkModeFilter(mode as "All" | "Remote" | "Hybrid" | "Onsite")
               }
               className={`rounded-full px-5 py-2 text-sm font-semibold transition ${workModeFilter === mode
-                  ? "bg-teal-600 text-white"
-                  : "border border-slate-200 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-700"
+                ? "bg-teal-600 text-white"
+                : "border border-slate-200 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-700"
                 }`}
             >
               {mode === "All" ? "All Jobs" : mode}
@@ -218,10 +240,21 @@ export default function JobsPage() {
 
                       <button
                         type="button"
-                        className="pointer-events-auto relative z-30 flex h-11 w-11 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 transition hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
-                        aria-label={`Save ${job.title}`}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          toggleSavedJob(job.id);
+                        }}
+                        className={`relative z-20 flex h-11 w-11 items-center justify-center rounded-2xl border transition ${isJobSaved(job.id)
+                            ? "border-teal-200 bg-teal-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+                          }`}
+                        aria-label={isJobSaved(job.id) ? `Unsave ${job.title}` : `Save ${job.title}`}
                       >
-                        <Bookmark className="h-5 w-5" />
+                        <Bookmark
+                          className="h-5 w-5"
+                          fill={isJobSaved(job.id) ? "currentColor" : "none"}
+                        />
                       </button>
                     </div>
                   </div>
