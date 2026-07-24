@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useState } from "react";
 import {
   Bookmark,
   BriefcaseBusiness,
@@ -40,6 +43,15 @@ function getRiskColor(risk: string) {
 }
 
 export default function JobsPage() {
+  const [workModeFilter, setWorkModeFilter] = useState<
+    "All" | "Remote" | "Hybrid" | "Onsite"
+  >("All");
+
+  const filteredJobs =
+    workModeFilter === "All"
+      ? mockJobs
+      : mockJobs.filter((job) => job.workMode === workModeFilter);
+
   return (
     <AppShell>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -82,21 +94,21 @@ export default function JobsPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap gap-3">
-          <button className="rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white">
-            All Jobs
-          </button>
-
-          <button className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700">
-            Remote
-          </button>
-
-          <button className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700">
-            Hybrid
-          </button>
-
-          <button className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700">
-            Onsite
-          </button>
+          {["All", "Remote", "Hybrid", "Onsite"].map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() =>
+                setWorkModeFilter(mode as "All" | "Remote" | "Hybrid" | "Onsite")
+              }
+              className={`rounded-full px-5 py-2 text-sm font-semibold transition ${workModeFilter === mode
+                  ? "bg-teal-600 text-white"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-700"
+                }`}
+            >
+              {mode === "All" ? "All Jobs" : mode}
+            </button>
+          ))}
 
           <button className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700">
             Source
@@ -112,7 +124,7 @@ export default function JobsPage() {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-medium text-slate-600">
-              {mockJobs.length} jobs found
+              {filteredJobs.length} jobs found
             </p>
 
             <button className="flex items-center gap-2 text-sm font-semibold text-teal-700">
@@ -122,7 +134,7 @@ export default function JobsPage() {
           </div>
 
           <div className="space-y-4">
-            {mockJobs.map((job) => (
+            {filteredJobs.map((job) => (
               <Card
                 key={job.id}
                 className="relative rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md"

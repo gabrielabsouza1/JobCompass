@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Home,
   BriefcaseBusiness,
@@ -37,6 +40,8 @@ const navItems = [
 ];
 
 export function AppSidebar() {
+  const pathname = usePathname();
+
   return (
     <aside className="hidden min-h-screen w-72 border-r border-slate-200 bg-white px-6 py-6 lg:flex lg:flex-col">
       <Link href="/dashboard" className="mb-10 flex items-center gap-3">
@@ -56,7 +61,10 @@ export function AppSidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className="flex items-center gap-4 rounded-2xl px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-teal-50 hover:text-teal-700"
+              className={`flex items-center gap-4 rounded-2xl px-4 py-3 text-sm font-medium transition ${pathname === item.href || pathname.startsWith(`${item.href}/`)
+                  ? "bg-teal-50 text-teal-700"
+                  : "text-slate-700 hover:bg-teal-50 hover:text-teal-700"
+                }`}
             >
               <Icon className="h-5 w-5" />
               {item.label}
