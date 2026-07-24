@@ -1,0 +1,164 @@
+import {
+  BriefcaseBusiness,
+  Bookmark,
+  CalendarDays,
+  Send,
+  ShieldAlert,
+  TrendingUp,
+} from "lucide-react";
+import { AppShell } from "@/components/layout/app-shell";
+import { Card, CardContent } from "@/components/ui/card";
+import { mockJobs, dashboardStats } from "@/data/mock-data";
+import { Badge } from "@/components/ui/badge";
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  helper,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  helper?: string;
+}) {
+  return (
+    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+      <CardContent className="flex items-center gap-4 p-5">
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
+          <Icon className="h-6 w-6" />
+        </div>
+
+        <div>
+          <p className="text-sm text-slate-500">{label}</p>
+          <p className="text-3xl font-bold tracking-tight text-slate-950">
+            {value}
+          </p>
+          {helper ? (
+            <p className="mt-1 text-xs font-medium text-teal-700">{helper}</p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <AppShell>
+      <section className="mb-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="grid gap-8 lg:grid-cols-[1fr_520px] lg:items-center">
+          <div>
+            <p className="mb-3 inline-flex rounded-full bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700">
+              Australia-focused job search
+            </p>
+
+            <h1 className="text-4xl font-bold tracking-tight text-slate-950 lg:text-5xl">
+              Good morning,{" "}
+              <span className="text-teal-600">Gabriela</span> 👋
+            </h1>
+
+            <p className="mt-4 max-w-2xl text-lg text-slate-600">
+              Let’s find the right opportunity for you across trusted Australian
+              job platforms.
+            </p>
+          </div>
+
+          <div className="rounded-[2rem] bg-gradient-to-br from-sky-50 to-teal-50 p-8 text-center">
+            <div className="text-7xl">🧭</div>
+            <p className="mt-4 text-sm font-medium text-slate-600">
+              Melbourne, VIC · Hybrid roles · 5 selected sources
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard
+          label="New jobs found"
+          value={dashboardStats.newJobs}
+          icon={BriefcaseBusiness}
+          helper="+24 this week"
+        />
+        <StatCard
+          label="Saved jobs"
+          value={dashboardStats.savedJobs}
+          icon={Bookmark}
+          helper="View saved jobs"
+        />
+        <StatCard
+          label="Applications sent"
+          value={dashboardStats.applicationsSent}
+          icon={Send}
+          helper="+2 this week"
+        />
+        <StatCard
+          label="Interviews upcoming"
+          value={dashboardStats.interviewsUpcoming}
+          icon={CalendarDays}
+          helper="View schedule"
+        />
+        <StatCard
+          label="Best source"
+          value={dashboardStats.bestSource}
+          icon={TrendingUp}
+          helper="This week"
+        />
+      </section>
+
+      <section className="mt-6 rounded-3xl border border-amber-200 bg-amber-50 p-5">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-amber-600">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+
+          <div>
+            <h2 className="font-semibold text-slate-950">
+              Work rights warnings found: {dashboardStats.workRightsWarnings}
+            </h2>
+            <p className="text-sm text-slate-600">
+              Some job ads may include work rights language that needs review.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="mt-8">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-950">
+            Top matched jobs today
+          </h2>
+
+          <a href="/jobs" className="text-sm font-semibold text-teal-700">
+            View all jobs →
+          </a>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          {mockJobs.map((job) => (
+            <Card
+              key={job.id}
+              className="rounded-3xl border-slate-200 bg-white shadow-sm"
+            >
+              <CardContent className="p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 font-bold text-slate-700">
+                    {job.source.slice(0, 1)}
+                  </div>
+
+                  <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                    {job.matchScore}% match
+                  </Badge>
+                </div>
+
+                <h3 className="font-semibold text-slate-950">{job.title}</h3>
+                <p className="text-sm text-slate-500">{job.company}</p>
+                <p className="mt-2 text-sm text-slate-500">{job.location}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+    </AppShell>
+  );
+}
