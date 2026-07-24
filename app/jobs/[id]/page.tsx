@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   ArrowLeft,
   Bookmark,
@@ -16,6 +18,7 @@ import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useSavedJobs } from "@/hooks/use-saved-jobs";
 
 function formatSalary(min?: number, max?: number) {
   if (!min && !max) return "Salary not listed";
@@ -40,18 +43,32 @@ function getRiskColor(risk: string) {
   return "bg-emerald-50 text-emerald-700";
 }
 
-type JobDetailPageProps = {
-  params: Promise<{
-    id: string;
-  }>;
-};
+export default function JobDetailPage() {
+  const params = useParams<{ id: string }>();
+  const { isJobSaved, toggleSavedJob } = useSavedJobs();
 
-export default async function JobDetailPage({ params }: JobDetailPageProps) {
-  const { id } = await params;
-  const job = mockJobs.find((item) => item.id === id);
+  const job = mockJobs.find((item) => item.id === params.id);
 
   if (!job) {
-    notFound();
+    return (
+      <AppShell>
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <h1 className="text-2xl font-bold text-slate-950">
+            Job not found
+          </h1>
+          <p className="mt-2 text-slate-600">
+            This job does not exist or is no longer available.
+          </p>
+
+          <Link
+            href="/jobs"
+            className="mt-5 inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700"
+          >
+            Back to jobs
+          </Link>
+        </div>
+      </AppShell>
+    );
   }
 
   return (
@@ -134,9 +151,18 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
               </div>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button className="h-12 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
-                  <Bookmark className="mr-2 h-5 w-5" />
-                  Save job
+                <Button
+                  onClick={() => toggleSavedJob(job.id)}
+                  className={`h-12 rounded-2xl px-6 ${isJobSaved(job.id)
+                      ? "bg-teal-700 hover:bg-teal-800"
+                      : "bg-teal-600 hover:bg-teal-700"
+                    }`}
+                >
+                  <Bookmark
+                    className="mr-2 h-5 w-5"
+                    fill={isJobSaved(job.id) ? "currentColor" : "none"}
+                  />
+                  {isJobSaved(job.id) ? "Saved job" : "Save job"}
                 </Button>
 
                 <Button
