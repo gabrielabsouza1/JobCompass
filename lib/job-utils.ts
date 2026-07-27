@@ -1,12 +1,17 @@
 export function formatSalary(min?: number, max?: number) {
+  const formatAmount = (value: number) =>
+    value.toLocaleString("en-AU", {
+      maximumFractionDigits: 0,
+    });
+
   if (!min && !max) return "Salary not listed";
 
   if (min && max) {
-    return `$${min.toLocaleString()} - $${max.toLocaleString()} AUD`;
+    return `$${formatAmount(min)} - $${formatAmount(max)} AUD`;
   }
 
-  if (min) return `From $${min.toLocaleString()} AUD`;
-  return `Up to $${max?.toLocaleString()} AUD`;
+  if (min) return `From $${formatAmount(min)} AUD`;
+  return `Up to $${formatAmount(max ?? 0)} AUD`;
 }
 
 export function getWorkModeColor(workMode: string) {

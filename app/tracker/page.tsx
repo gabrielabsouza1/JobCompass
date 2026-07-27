@@ -17,11 +17,22 @@ import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { mockApplications } from "@/data/mock-applications";
+import type { ApplicationStatus } from "@/types";
 
 export default function TrackerPage() {
   const { savedJobIds } = useSavedJobs();
 
   const savedJobs = mockJobs.filter((job) => savedJobIds.includes(job.id));
+
+  function getJobsByStatus(status: ApplicationStatus) {
+    return mockApplications
+      .filter((application) => application.status === status)
+      .map((application) =>
+        mockJobs.find((job) => job.id === application.jobId)
+      )
+      .filter((job) => job !== undefined);
+  }
 
   const applicationColumns = [
     {
@@ -36,28 +47,28 @@ export default function TrackerPage() {
       title: "Applied",
       icon: FileCheck2,
       color: "bg-sky-50 text-sky-700",
-      jobs: [mockJobs[2]],
+      jobs: getJobsByStatus("Applied"),
     },
     {
       id: "interview",
       title: "Interview",
       icon: MessageCircle,
       color: "bg-purple-50 text-purple-700",
-      jobs: [mockJobs[0]],
+      jobs: getJobsByStatus("Interview"),
     },
     {
       id: "offer",
       title: "Offer",
       icon: CheckCircle2,
       color: "bg-emerald-50 text-emerald-700",
-      jobs: [],
+      jobs: getJobsByStatus("Offer"),
     },
     {
       id: "rejected",
       title: "Rejected",
       icon: XCircle,
       color: "bg-red-50 text-red-700",
-      jobs: [],
+      jobs: getJobsByStatus("Rejected"),
     },
   ];
 
