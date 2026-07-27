@@ -8,7 +8,6 @@ import {
   FileCheck2,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
-import { mockJobs } from "@/data/mock-data";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AddApplicationModal } from "@/components/tracker/add-application-modal";
@@ -19,11 +18,13 @@ export default function TrackerPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const {
+    jobs,
     newApplication,
     setNewApplication,
     applicationColumns,
     totalApplications,
     handleAddApplication,
+    resetApplications,
   } = useApplicationTracker();
 
   function handleSaveApplication() {
@@ -48,12 +49,23 @@ export default function TrackerPage() {
           </p>
         </div>
 
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
-        >
-          Add application
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={resetApplications}
+            className="h-11 rounded-2xl border-slate-200 bg-white px-6"
+          >
+            Reset mock data
+          </Button>
+
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+          >
+            Add application
+          </Button>
+        </div>
       </div>
 
       <section className="mb-6 grid gap-4 md:grid-cols-4">
@@ -130,7 +142,7 @@ export default function TrackerPage() {
       </section>
       <AddApplicationModal
         isOpen={isAddModalOpen}
-        jobs={mockJobs}
+        jobs={jobs}
         newApplication={newApplication}
         setNewApplication={setNewApplication}
         onClose={() => setIsAddModalOpen(false)}

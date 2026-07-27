@@ -69,4 +69,14 @@ export function useApplications() {
     applications,
     addApplication,
   };
+
+  function resetApplications() {
+    writeApplicationsToStorage(mockApplications);
+  }
+
+  return {
+    applications,
+    addApplication,
+    resetApplications,
+  };
 }
