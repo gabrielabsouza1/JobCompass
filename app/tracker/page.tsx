@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import {
   BriefcaseBusiness,
@@ -17,14 +18,22 @@ import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  mockApplications,
-  type MockApplication,
-} from "@/data/mock-applications";
+import { type MockApplication } from "@/data/mock-applications";
+import { useApplications } from "@/hooks/use-applications";
 import type { ApplicationStatus, Job } from "@/types";
+import { AddApplicationModal } from "@/components/tracker/add-application-modal";
 
 export default function TrackerPage() {
   const { savedJobIds } = useSavedJobs();
+  const { applications, addApplication } = useApplications();
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  const [newApplication, setNewApplication] = useState({
+    jobId: mockJobs[0]?.id ?? "",
+    status: "Applied" as ApplicationStatus,
+    nextStep: "",
+    notes: "",
+  });
 
   const savedJobs = mockJobs.filter((job) => savedJobIds.includes(job.id));
 
@@ -46,7 +55,7 @@ export default function TrackerPage() {
   function getApplicationItemsByStatus(
     status: ApplicationStatus
   ): ApplicationItem[] {
-    return mockApplications
+    return applications
       .filter((application) => application.status === status)
       .map((application) => {
         const job = mockJobs.find((item) => item.id === application.jobId);
@@ -69,7 +78,7 @@ export default function TrackerPage() {
       title: "Saved",
       icon: Clock3,
       color: "bg-slate-100 text-slate-700",
-      items: savedApplicationItems,
+      items: [...savedApplicationItems, ...getApplicationItemsByStatus("Saved")],
     },
     {
       id: "applied",
@@ -105,6 +114,32 @@ export default function TrackerPage() {
     (total, column) => total + column.items.length,
     0
   );
+
+  function handleAddApplication() {
+    addApplication({
+      id: `app-${Date.now()}`,
+      jobId: newApplication.jobId,
+      status: newApplication.status,
+      appliedAt:
+        newApplication.status === "Applied" ||
+          newApplication.status === "Interview" ||
+          newApplication.status === "Offer"
+          ? new Date().toISOString().slice(0, 10)
+          : undefined,
+      nextStep: newApplication.nextStep.trim() || "Review this application later.",
+      notes: newApplication.notes.trim() || undefined,
+    });
+
+    setNewApplication({
+      jobId: mockJobs[0]?.id ?? "",
+      status: "Applied",
+      nextStep: "",
+      notes: "",
+    });
+
+    setIsAddModalOpen(false);
+  }
+
   return (
     <AppShell>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -122,7 +157,10 @@ export default function TrackerPage() {
           </p>
         </div>
 
-        <Button className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
+        <Button
+          onClick={() => setIsAddModalOpen(true)}
+          className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+        >
           Add application
         </Button>
       </div>
@@ -296,6 +334,14 @@ export default function TrackerPage() {
           })}
         </div>
       </section>
+      <AddApplicationModal
+        isOpen={isAddModalOpen}
+        jobs={mockJobs}
+        newApplication={newApplication}
+        setNewApplication={setNewApplication}
+        onClose={() => setIsAddModalOpen(false)}
+        onSave={handleAddApplication}
+      />
     </AppShell>
   );
 }
