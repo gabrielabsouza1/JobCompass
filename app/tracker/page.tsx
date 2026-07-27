@@ -17,21 +17,50 @@ import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { mockApplications } from "@/data/mock-applications";
-import type { ApplicationStatus } from "@/types";
+import {
+  mockApplications,
+  type MockApplication,
+} from "@/data/mock-applications";
+import type { ApplicationStatus, Job } from "@/types";
 
 export default function TrackerPage() {
   const { savedJobIds } = useSavedJobs();
 
   const savedJobs = mockJobs.filter((job) => savedJobIds.includes(job.id));
 
-  function getJobsByStatus(status: ApplicationStatus) {
+  type ApplicationItem = {
+    job: Job;
+    application: MockApplication;
+  };
+
+  const savedApplicationItems: ApplicationItem[] = savedJobs.map((job) => ({
+    job,
+    application: {
+      id: `saved-${job.id}`,
+      jobId: job.id,
+      status: "Saved",
+      nextStep: "Review job and prepare application.",
+    },
+  }));
+
+  function getApplicationItemsByStatus(
+    status: ApplicationStatus
+  ): ApplicationItem[] {
     return mockApplications
       .filter((application) => application.status === status)
-      .map((application) =>
-        mockJobs.find((job) => job.id === application.jobId)
-      )
-      .filter((job) => job !== undefined);
+      .map((application) => {
+        const job = mockJobs.find((item) => item.id === application.jobId);
+
+        if (!job) {
+          return null;
+        }
+
+        return {
+          job,
+          application,
+        };
+      })
+      .filter((item): item is ApplicationItem => item !== null);
   }
 
   const applicationColumns = [
@@ -40,40 +69,40 @@ export default function TrackerPage() {
       title: "Saved",
       icon: Clock3,
       color: "bg-slate-100 text-slate-700",
-      jobs: savedJobs,
+      items: savedApplicationItems,
     },
     {
       id: "applied",
       title: "Applied",
       icon: FileCheck2,
       color: "bg-sky-50 text-sky-700",
-      jobs: getJobsByStatus("Applied"),
+      items: getApplicationItemsByStatus("Applied"),
     },
     {
       id: "interview",
       title: "Interview",
       icon: MessageCircle,
       color: "bg-purple-50 text-purple-700",
-      jobs: getJobsByStatus("Interview"),
+      items: getApplicationItemsByStatus("Interview"),
     },
     {
       id: "offer",
       title: "Offer",
       icon: CheckCircle2,
       color: "bg-emerald-50 text-emerald-700",
-      jobs: getJobsByStatus("Offer"),
+      items: getApplicationItemsByStatus("Offer"),
     },
     {
       id: "rejected",
       title: "Rejected",
       icon: XCircle,
       color: "bg-red-50 text-red-700",
-      jobs: getJobsByStatus("Rejected"),
+      items: getApplicationItemsByStatus("Rejected"),
     },
   ];
 
   const totalApplications = applicationColumns.reduce(
-    (total, column) => total + column.jobs.length,
+    (total, column) => total + column.items.length,
     0
   );
   return (
@@ -124,7 +153,7 @@ export default function TrackerPage() {
               <p className="text-sm text-slate-500">Applied</p>
               <p className="text-3xl font-bold text-slate-950">
                 {applicationColumns.find((column) => column.id === "applied")
-                  ?.jobs.length ?? 0}
+                  ?.items.length ?? 0}
               </p>
             </div>
           </CardContent>
@@ -140,7 +169,7 @@ export default function TrackerPage() {
               <p className="text-sm text-slate-500">Interviews</p>
               <p className="text-3xl font-bold text-slate-950">
                 {applicationColumns.find((column) => column.id === "interview")
-                  ?.jobs.length ?? 0}
+                  ?.items.length ?? 0}
               </p>
             </div>
           </CardContent>
@@ -156,7 +185,7 @@ export default function TrackerPage() {
               <p className="text-sm text-slate-500">Offers</p>
               <p className="text-3xl font-bold text-slate-950">
                 {applicationColumns.find((column) => column.id === "offer")
-                  ?.jobs.length ?? 0}
+                  ?.items.length ?? 0}
               </p>
             </div>
           </CardContent>
@@ -183,17 +212,17 @@ export default function TrackerPage() {
                         {column.title}
                       </h2>
                       <p className="text-sm text-slate-500">
-                        {column.jobs.length} jobs
+                        {column.items.length} jobs
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="space-y-3">
-                  {column.jobs.length > 0 ? (
-                    column.jobs.map((job, index) => (
+                  {column.items.length > 0 ? (
+                    column.items.map(({ job, application }, index) => (
                       <Card
-                        key={`${column.id}-${job.id}-${index}`}
+                        key={`${column.id}-${application.id}-${index}`}
                         className="rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                       >
                         <CardContent className="p-4">
@@ -236,17 +265,21 @@ export default function TrackerPage() {
                               Next step
                             </p>
                             <p className="mt-1 text-sm text-slate-700">
-                              {column.id === "saved"
-                                ? "Review job and prepare application."
-                                : column.id === "applied"
-                                  ? "Wait for employer response."
-                                  : column.id === "interview"
-                                    ? "Prepare interview notes."
-                                    : column.id === "offer"
-                                      ? "Review offer details."
-                                      : "Archive or follow up later."}
+                              {application.nextStep}
                             </p>
                           </div>
+
+                          {application.appliedAt ? (
+                            <p className="mt-3 text-xs text-slate-500">
+                              Applied at {application.appliedAt}
+                            </p>
+                          ) : null}
+
+                          {application.notes ? (
+                            <p className="mt-2 rounded-2xl bg-amber-50 p-3 text-xs leading-5 text-slate-600">
+                              {application.notes}
+                            </p>
+                          ) : null}
                         </CardContent>
                       </Card>
                     ))
