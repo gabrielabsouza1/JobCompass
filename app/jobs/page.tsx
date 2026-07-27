@@ -4,49 +4,24 @@ import Link from "next/link";
 import { useState } from "react";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import {
-  Bookmark,
-  BriefcaseBusiness,
-  Building2,
   Filter,
-  MapPin,
   Search,
   SlidersHorizontal,
 } from "lucide-react";
-
+import { getPostedAtValue } from "@/lib/job-utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-
-function formatSalary(min?: number, max?: number) {
-  if (!min && !max) return "Salary not listed";
-
-  if (min && max) {
-    return `$${min.toLocaleString()} - $${max.toLocaleString()} AUD`;
-  }
-
-  if (min) return `From $${min.toLocaleString()} AUD`;
-  return `Up to $${max?.toLocaleString()} AUD`;
-}
-
-function getWorkModeColor(workMode: string) {
-  if (workMode === "Remote") return "bg-purple-50 text-purple-700";
-  if (workMode === "Hybrid") return "bg-sky-50 text-sky-700";
-  return "bg-emerald-50 text-emerald-700";
-}
-
-function getRiskColor(risk: string) {
-  if (risk === "High") return "bg-red-50 text-red-700";
-  if (risk === "Medium") return "bg-amber-50 text-amber-700";
-  return "bg-emerald-50 text-emerald-700";
-}
+import { JobCard } from "@/components/jobs/job-card";
 
 export default function JobsPage() {
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
-
+  const [sourceFilter, setSourceFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortByNewest, setSortByNewest] = useState(false);
 
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
@@ -55,6 +30,9 @@ export default function JobsPage() {
   const filteredJobs = mockJobs.filter((job) => {
     const matchesWorkMode =
       workModeFilter === "All" || job.workMode === workModeFilter;
+
+    const matchesSource =
+      sourceFilter === "All" || job.source === sourceFilter;
 
     const searchText = [
       job.title,
@@ -69,8 +47,18 @@ export default function JobsPage() {
 
     const matchesSearch = searchText.includes(searchQuery.toLowerCase());
 
-    return matchesWorkMode && matchesSearch;
+    return matchesWorkMode && matchesSource && matchesSearch;
   });
+
+  const visibleJobs = [...filteredJobs].sort((a, b) => {
+    if (!sortByNewest) {
+      return b.matchScore - a.matchScore;
+    }
+
+    return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
+  });
+
+  const availableSources = ["All", ...new Set(mockJobs.map((job) => job.source))];
 
   return (
     <AppShell>
@@ -132,11 +120,26 @@ export default function JobsPage() {
             </button>
           ))}
 
-          <button className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700">
-            Source
-          </button>
+          <select
+            value={sourceFilter}
+            onChange={(event) => setSourceFilter(event.target.value)}
+            className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 outline-none transition hover:bg-teal-50 hover:text-teal-700"
+          >
+            {availableSources.map((source) => (
+              <option key={source} value={source}>
+                {source === "All" ? "All sources" : source}
+              </option>
+            ))}
+          </select>
 
-          <button className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700">
+          <button
+            type="button"
+            onClick={() => setSortByNewest((current) => !current)}
+            className={`rounded-full px-5 py-2 text-sm font-semibold transition ${sortByNewest
+              ? "bg-teal-600 text-white"
+              : "border border-slate-200 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-700"
+              }`}
+          >
             Newest
           </button>
         </div>
@@ -146,120 +149,23 @@ export default function JobsPage() {
         <section>
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-medium text-slate-600">
-              {filteredJobs.length} jobs found
+              {visibleJobs.length} jobs found
             </p>
 
             <button className="flex items-center gap-2 text-sm font-semibold text-teal-700">
               <Filter className="h-4 w-4" />
-              Sort by best match
+              {sortByNewest ? "Sort by newest" : "Sort by best match"}
             </button>
           </div>
 
           <div className="space-y-4">
-            {filteredJobs.map((job) => (
-              <Card
+            {visibleJobs.map((job) => (
+              <JobCard
                 key={job.id}
-                className="relative rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md"
-              >
-                <Link
-                  href={`/jobs/${job.id}`}
-                  className="absolute inset-0 z-10 rounded-3xl max-w-8/10"
-                  aria-label={`Open ${job.title} job details`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                />
-
-                <CardContent className="relative z-0 p-5">
-                  <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between z-0">
-                    <div className="flex gap-4">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-bold text-slate-700">
-                        {job.source.slice(0, 1)}
-                      </div>
-
-                      <div>
-                        <div className="mb-1 flex flex-wrap items-center gap-2">
-                          <h2 className="text-xl font-bold text-slate-950">
-                            {job.title}
-                          </h2>
-
-                          <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                            {job.matchScore}% match
-                          </Badge>
-                        </div>
-
-                        <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Building2 className="h-4 w-4" />
-                            {job.company}
-                          </span>
-
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-4 w-4" />
-                            {job.location}
-                          </span>
-
-                          <span className="flex items-center gap-1">
-                            <BriefcaseBusiness className="h-4 w-4" />
-                            via {job.source}
-                          </span>
-                        </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Badge
-                            className={`rounded-full hover:bg-current ${getWorkModeColor(
-                              job.workMode
-                            )}`}
-                          >
-                            {job.workMode}
-                          </Badge>
-
-                          <Badge className="rounded-full bg-teal-50 text-teal-700 hover:bg-teal-50">
-                            {job.employmentType}
-                          </Badge>
-
-                          <Badge
-                            className={`rounded-full hover:bg-current ${getRiskColor(
-                              job.workRightsRisk
-                            )}`}
-                          >
-                            {job.workRightsRisk} work rights risk
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-5 lg:flex-col lg:items-end z-20">
-                      <div className="text-left lg:text-right">
-                        <p className="font-semibold text-slate-950">
-                          {formatSalary(job.salaryMin, job.salaryMax)}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-500">
-                          Posted {job.postedAt}
-                        </p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.preventDefault();
-                          event.stopPropagation();
-                          toggleSavedJob(job.id);
-                        }}
-                        className={`relative z-20 flex h-11 w-11 items-center justify-center rounded-2xl border transition ${isJobSaved(job.id)
-                            ? "border-teal-200 bg-teal-600 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
-                          }`}
-                        aria-label={isJobSaved(job.id) ? `Unsave ${job.title}` : `Save ${job.title}`}
-                      >
-                        <Bookmark
-                          className="h-5 w-5"
-                          fill={isJobSaved(job.id) ? "currentColor" : "none"}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                job={job}
+                isSaved={isJobSaved(job.id)}
+                onToggleSave={() => toggleSavedJob(job.id)}
+              />
             ))}
           </div>
         </section>

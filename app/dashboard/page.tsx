@@ -1,3 +1,5 @@
+"use client";
+
 import {
   BriefcaseBusiness,
   Bookmark,
@@ -5,11 +7,13 @@ import {
   Send,
   ShieldAlert,
   TrendingUp,
+  Link,
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { mockJobs, dashboardStats } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
+import { useSavedJobs } from "@/hooks/use-saved-jobs";
 
 function StatCard({
   label,
@@ -44,6 +48,8 @@ function StatCard({
 }
 
 export default function DashboardPage() {
+  const { savedJobIds } = useSavedJobs();
+
   return (
     <AppShell>
       <section className="mb-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
@@ -82,7 +88,7 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Saved jobs"
-          value={dashboardStats.savedJobs}
+          value={savedJobIds.length}
           icon={Bookmark}
           helper="View saved jobs"
         />
@@ -129,9 +135,9 @@ export default function DashboardPage() {
             Top matched jobs today
           </h2>
 
-          <a href="/jobs" className="text-sm font-semibold text-teal-700">
+          <Link href="/jobs" className="text-sm font-semibold text-teal-700">
             View all jobs →
-          </a>
+          </Link>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">

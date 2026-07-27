@@ -11,25 +11,12 @@ import {
   MessageCircle,
   XCircle,
 } from "lucide-react";
-
+import { formatSalary } from "@/lib/job-utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-
-
-
-function formatSalary(min?: number, max?: number) {
-  if (!min && !max) return "Salary not listed";
-
-  if (min && max) {
-    return `$${min.toLocaleString()} - $${max.toLocaleString()} AUD`;
-  }
-
-  if (min) return `From $${min.toLocaleString()} AUD`;
-  return `Up to $${max?.toLocaleString()} AUD`;
-}
 
 export default function TrackerPage() {
   const { savedJobIds } = useSavedJobs();
