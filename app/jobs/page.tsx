@@ -16,12 +16,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { JobCard } from "@/components/jobs/job-card";
+import { AppToast } from "@/components/ui/app-toast";
 
 export default function JobsPage() {
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
   const [sourceFilter, setSourceFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
@@ -59,6 +61,22 @@ export default function JobsPage() {
   });
 
   const availableSources = ["All", ...new Set(mockJobs.map((job) => job.source))];
+
+  function showToast(message: string) {
+  setToastMessage(message);
+
+  window.setTimeout(() => {
+    setToastMessage("");
+  }, 2500);
+}
+
+function handleToggleSavedJob(jobId: string) {
+  const wasSaved = isJobSaved(jobId);
+
+  toggleSavedJob(jobId);
+
+  showToast(wasSaved ? "Job removed from saved" : "Job saved");
+}
 
   return (
     <AppShell>
@@ -164,7 +182,7 @@ export default function JobsPage() {
                 key={job.id}
                 job={job}
                 isSaved={isJobSaved(job.id)}
-                onToggleSave={() => toggleSavedJob(job.id)}
+                onToggleSave={() => handleToggleSavedJob(job.id)}
               />
             ))}
           </div>
@@ -251,6 +269,7 @@ export default function JobsPage() {
           </Card>
         </aside>
       </div>
+      <AppToast message={toastMessage} />
     </AppShell>
   );
 }

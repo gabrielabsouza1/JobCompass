@@ -13,9 +13,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AddApplicationModal } from "@/components/tracker/add-application-modal";
 import { ApplicationColumn } from "@/components/tracker/application-column";
 import { useApplicationTracker } from "@/hooks/use-application-tracker";
+import { AppToast } from "@/components/ui/app-toast";
 
 export default function TrackerPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const {
     jobs,
@@ -27,9 +29,18 @@ export default function TrackerPage() {
     resetApplications,
   } = useApplicationTracker();
 
+  function showToast(message: string) {
+    setToastMessage(message);
+
+    window.setTimeout(() => {
+      setToastMessage("");
+    }, 2500);
+  }
+
   function handleSaveApplication() {
     handleAddApplication();
     setIsAddModalOpen(false);
+    showToast("Application added");
   }
 
   return (
@@ -53,7 +64,10 @@ export default function TrackerPage() {
           <Button
             type="button"
             variant="outline"
-            onClick={resetApplications}
+            onClick={() => {
+              resetApplications?.();
+              showToast("Mock data reset");
+            }}
             className="h-11 rounded-2xl border-slate-200 bg-white px-6"
           >
             Reset mock data
@@ -148,6 +162,7 @@ export default function TrackerPage() {
         onClose={() => setIsAddModalOpen(false)}
         onSave={handleSaveApplication}
       />
+      <AppToast message={toastMessage} />
     </AppShell>
   );
 }

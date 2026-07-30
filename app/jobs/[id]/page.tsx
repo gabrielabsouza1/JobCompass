@@ -13,41 +13,42 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import {
+  formatSalary,
+  getRiskColor,
+  getWorkModeColor,
+} from "@/lib/job-utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
-
-function formatSalary(min?: number, max?: number) {
-  if (!min && !max) return "Salary not listed";
-
-  if (min && max) {
-    return `$${min.toLocaleString()} - $${max.toLocaleString()} AUD`;
-  }
-
-  if (min) return `From $${min.toLocaleString()} AUD`;
-  return `Up to $${max?.toLocaleString()} AUD`;
-}
-
-function getWorkModeColor(workMode: string) {
-  if (workMode === "Remote") return "bg-purple-50 text-purple-700";
-  if (workMode === "Hybrid") return "bg-sky-50 text-sky-700";
-  return "bg-emerald-50 text-emerald-700";
-}
-
-function getRiskColor(risk: string) {
-  if (risk === "High") return "bg-red-50 text-red-700";
-  if (risk === "Medium") return "bg-amber-50 text-amber-700";
-  return "bg-emerald-50 text-emerald-700";
-}
+import { useState } from "react";
+import { AppToast } from "@/components/ui/app-toast";
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
+  const [toastMessage, setToastMessage] = useState("");
 
   const job = mockJobs.find((item) => item.id === params.id);
+
+  function showToast(message: string) {
+  setToastMessage(message);
+
+  window.setTimeout(() => {
+    setToastMessage("");
+  }, 2500);
+}
+
+function handleToggleSavedJob(jobId: string) {
+  const wasSaved = isJobSaved(jobId);
+
+  toggleSavedJob(jobId);
+
+  showToast(wasSaved ? "Job removed from saved" : "Job saved");
+}
 
   if (!job) {
     return (
@@ -152,7 +153,7 @@ export default function JobDetailPage() {
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                 <Button
-                  onClick={() => toggleSavedJob(job.id)}
+                  onClick={() => handleToggleSavedJob(job.id)}
                   className={`h-12 rounded-2xl px-6 ${isJobSaved(job.id)
                       ? "bg-teal-700 hover:bg-teal-800"
                       : "bg-teal-600 hover:bg-teal-700"
@@ -307,6 +308,7 @@ export default function JobDetailPage() {
           </Card>
         </aside>
       </div>
+      <AppToast message={toastMessage} />
     </AppShell>
   );
 }
