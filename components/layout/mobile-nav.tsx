@@ -8,14 +8,15 @@ import {
   Globe2,
   Home,
   UserCircle,
+  Settings
 } from "lucide-react";
 
 const navItems = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
   { label: "Tracker", href: "/tracker", icon: ClipboardCheck },
-  { label: "Sources", href: "/sources", icon: Globe2 },
   { label: "Profile", href: "/profile", icon: UserCircle },
+  { label: "Settings", href: "/settings", icon: Settings },
 ];
 
 export function MobileNav() {
