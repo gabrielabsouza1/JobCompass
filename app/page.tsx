@@ -62,10 +62,10 @@ export default function HomePage() {
         </nav>
 
         <Link
-          href="/onboarding"
+          href="/login"
           className="inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700"
         >
-          Get Started
+          Login
         </Link>
       </header>
 
@@ -88,7 +88,7 @@ export default function HomePage() {
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
             <Link
-              href="/dashboard"
+              href="/signup"
               className="inline-flex h-12 items-center justify-center rounded-2xl bg-teal-600 px-6 text-sm font-semibold text-white transition hover:bg-teal-700"
             >
               Get started
