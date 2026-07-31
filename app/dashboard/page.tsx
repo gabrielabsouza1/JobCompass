@@ -11,9 +11,11 @@ import {
 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
-import { mockJobs, dashboardStats } from "@/data/mock-data";
+import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
+import { useApplications } from "@/hooks/use-applications";
+import { useJobSources } from "@/hooks/use-job-sources";
 
 function StatCard({
   label,
@@ -49,10 +51,46 @@ function StatCard({
 
 export default function DashboardPage() {
   const { savedJobIds } = useSavedJobs();
+  const { applications } = useApplications();
+  const { selectedSourceIds } = useJobSources();
+
+  const visibleJobs = mockJobs.filter((job) =>
+    selectedSourceIds.some((sourceId) =>
+      job.source.toLowerCase().includes(sourceId.toLowerCase())
+    )
+  );
+
+  const interviewsUpcoming = applications.filter(
+    (application) => application.status === "Interview"
+  ).length;
+
+  const applicationsSent = applications.filter(
+    (application) =>
+      application.status === "Applied" ||
+      application.status === "Interview" ||
+      application.status === "Offer" ||
+      application.status === "Rejected"
+  ).length;
+
+  const workRightsWarnings = visibleJobs.filter(
+    (job) => job.workRightsRisk === "Medium" || job.workRightsRisk === "High"
+  ).length;
+
+  const bestSource =
+    visibleJobs.length > 0
+      ? visibleJobs.reduce<Record<string, number>>((acc, job) => {
+        acc[job.source] = (acc[job.source] ?? 0) + 1;
+        return acc;
+      }, {})
+      : {};
+
+  const bestSourceName =
+    Object.entries(bestSource).sort((a, b) => b[1] - a[1])[0]?.[0] ??
+    "No source";
 
   return (
     <AppShell>
-      <section className="mb-8 overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-8 shadow-sm">
+      <section className="mb-8 overflow-hidden rounded-4xl border border-slate-200 bg-white p-8 shadow-sm">
         <div className="grid gap-8 lg:grid-cols-[1fr_520px] lg:items-center">
           <div>
             <p className="mb-3 inline-flex rounded-full bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700">
@@ -70,7 +108,7 @@ export default function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-[2rem] bg-gradient-to-br from-sky-50 to-teal-50 p-8 text-center">
+          <div className="rounded-4xl bg-linear-to-br from-sky-50 to-teal-50 p-8 text-center">
             <div className="text-7xl">🧭</div>
             <p className="mt-4 text-sm font-medium text-slate-600">
               Melbourne, VIC · Hybrid roles · 5 selected sources
@@ -82,9 +120,9 @@ export default function DashboardPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="New jobs found"
-          value={dashboardStats.newJobs}
+          value={visibleJobs.length}
           icon={BriefcaseBusiness}
-          helper="+24 this week"
+          helper="From selected sources"
         />
         <StatCard
           label="Saved jobs"
@@ -94,21 +132,21 @@ export default function DashboardPage() {
         />
         <StatCard
           label="Applications sent"
-          value={dashboardStats.applicationsSent}
+          value={applicationsSent}
           icon={Send}
-          helper="+2 this week"
+          helper="Tracked applications"
         />
         <StatCard
           label="Interviews upcoming"
-          value={dashboardStats.interviewsUpcoming}
+          value={interviewsUpcoming}
           icon={CalendarDays}
-          helper="View schedule"
+          helper="View tracker"
         />
         <StatCard
           label="Best source"
-          value={dashboardStats.bestSource}
+          value={bestSourceName}
           icon={TrendingUp}
-          helper="This week"
+          helper="Based on visible jobs"
         />
       </section>
 
@@ -120,7 +158,7 @@ export default function DashboardPage() {
 
           <div>
             <h2 className="font-semibold text-slate-950">
-              Work rights warnings found: {dashboardStats.workRightsWarnings}
+              Work rights warnings found: {workRightsWarnings}
             </h2>
             <p className="text-sm text-slate-600">
               Some job ads may include work rights language that needs review.
@@ -141,7 +179,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid gap-4 lg:grid-cols-3">
-          {mockJobs.map((job) => (
+          {visibleJobs.slice(0, 3).map((job) => (
             <Card
               key={job.id}
               className="rounded-3xl border-slate-200 bg-white shadow-sm"
