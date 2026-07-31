@@ -178,30 +178,54 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          {visibleJobs.slice(0, 3).map((job) => (
-            <Card
-              key={job.id}
-              className="rounded-3xl border-slate-200 bg-white shadow-sm"
-            >
-              <CardContent className="p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 font-bold text-slate-700">
-                    {job.source.slice(0, 1)}
+        {visibleJobs.length > 0 ? (
+          <div className="grid gap-4 lg:grid-cols-3">
+            {visibleJobs.slice(0, 3).map((job) => (
+              <Card
+                key={job.id}
+                className="rounded-3xl border-slate-200 bg-white shadow-sm"
+              >
+                <CardContent className="p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 font-bold text-slate-700">
+                      {job.source.slice(0, 1)}
+                    </div>
+
+                    <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                      {job.matchScore}% match
+                    </Badge>
                   </div>
 
-                  <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                    {job.matchScore}% match
-                  </Badge>
-                </div>
+                  <h3 className="font-semibold text-slate-950">{job.title}</h3>
+                  <p className="text-sm text-slate-500">{job.company}</p>
+                  <p className="mt-2 text-sm text-slate-500">{job.location}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-4xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-3xl">
+              🧭
+            </div>
 
-                <h3 className="font-semibold text-slate-950">{job.title}</h3>
-                <p className="text-sm text-slate-500">{job.company}</p>
-                <p className="mt-2 text-sm text-slate-500">{job.location}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+            <h3 className="mt-5 text-2xl font-bold text-slate-950">
+              No matched jobs yet
+            </h3>
+
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+              Your selected sources do not have matching mock jobs right now. Try
+              managing your job sources to see more opportunities.
+            </p>
+
+            <Link
+              href="/sources"
+              className="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700"
+            >
+              Manage job sources
+            </Link>
+          </div>
+        )}
       </section>
     </AppShell>
   );
