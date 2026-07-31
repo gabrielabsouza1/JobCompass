@@ -18,10 +18,12 @@ import { Input } from "@/components/ui/input";
 import { JobCard } from "@/components/jobs/job-card";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
+import { useJobSources } from "@/hooks/use-job-sources";
 
 export default function JobsPage() {
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
   const { toastMessage, showToast } = useToast();
+  const { selectedSourceIds } = useJobSources();
   const [sourceFilter, setSourceFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
@@ -31,6 +33,12 @@ export default function JobsPage() {
   >("All");
 
   const filteredJobs = mockJobs.filter((job) => {
+    const matchesSelectedSources = selectedSourceIds.some((sourceId) => {
+      const selectedSource = sourceId.toLowerCase();
+
+      return job.source.toLowerCase().includes(selectedSource);
+    });
+
     const matchesWorkMode =
       workModeFilter === "All" || job.workMode === workModeFilter;
 
@@ -50,7 +58,12 @@ export default function JobsPage() {
 
     const matchesSearch = searchText.includes(searchQuery.toLowerCase());
 
-    return matchesWorkMode && matchesSource && matchesSearch;
+    return (
+      matchesSelectedSources &&
+      matchesWorkMode &&
+      matchesSource &&
+      matchesSearch
+    );
   });
 
   const visibleJobs = [...filteredJobs].sort((a, b) => {
@@ -63,13 +76,20 @@ export default function JobsPage() {
 
   const availableSources = ["All", ...new Set(mockJobs.map((job) => job.source))];
 
-function handleToggleSavedJob(jobId: string) {
-  const wasSaved = isJobSaved(jobId);
+  function handleToggleSavedJob(jobId: string) {
+    const wasSaved = isJobSaved(jobId);
 
-  toggleSavedJob(jobId);
+    toggleSavedJob(jobId);
 
-  showToast(wasSaved ? "Job removed from saved" : "Job saved");
-}
+    showToast(wasSaved ? "Job removed from saved" : "Job saved");
+  }
+
+  function clearFilters() {
+    setSearchQuery("");
+    setWorkModeFilter("All");
+    setSourceFilter("All");
+    setSortByNewest(false);
+  }
 
   return (
     <AppShell>
@@ -170,14 +190,47 @@ function handleToggleSavedJob(jobId: string) {
           </div>
 
           <div className="space-y-4">
-            {visibleJobs.map((job) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                isSaved={isJobSaved(job.id)}
-                onToggleSave={() => handleToggleSavedJob(job.id)}
-              />
-            ))}
+            {visibleJobs.length > 0 ? (
+              visibleJobs.map((job) => (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  isSaved={isJobSaved(job.id)}
+                  onToggleSave={() => handleToggleSavedJob(job.id)}
+                />
+              ))
+            ) : (
+              <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-3xl">
+                  🧭
+                </div>
+
+                <h2 className="mt-5 text-2xl font-bold text-slate-950">
+                  No jobs found
+                </h2>
+
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
+                  Try changing your filters, search terms, or selected job sources.
+                </p>
+
+                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+                  <button
+                    type="button"
+                    onClick={clearFilters}
+                    className="inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700"
+                  >
+                    Clear filters
+                  </button>
+
+                  <Link
+                    href="/sources"
+                    className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-teal-50 hover:text-teal-700"
+                  >
+                    Manage sources
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

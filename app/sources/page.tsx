@@ -271,8 +271,8 @@ export default function SourcesPage() {
                       toggleSource(source.id);
                     }}
                     className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition ${isSelected
-                        ? "border-teal-200 bg-teal-600 text-white"
-                        : "border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+                      ? "border-teal-200 bg-teal-600 text-white"
+                      : "border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
                       }`}
                     aria-label={isSelected ? `Unselect ${source.name}` : `Select ${source.name}`}
                   >
