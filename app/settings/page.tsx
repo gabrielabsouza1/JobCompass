@@ -1,3 +1,5 @@
+"use client";
+
 import {
     Bell,
     Database,
@@ -13,6 +15,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useState } from "react";
+import { AppToast } from "@/components/ui/app-toast";
 
 const settingsSections = [
     {
@@ -42,6 +46,27 @@ const settingsSections = [
 ];
 
 export default function SettingsPage() {
+    const [toastMessage, setToastMessage] = useState("");
+
+    function showToast(message: string) {
+        setToastMessage(message);
+
+        window.setTimeout(() => {
+            setToastMessage("");
+        }, 2500);
+    }
+
+    function handleResetLocalData() {
+        window.localStorage.removeItem("jobcompass_saved_jobs");
+        window.localStorage.removeItem("jobcompass_applications");
+
+        window.dispatchEvent(new Event("jobcompass_saved_jobs_changed"));
+        window.dispatchEvent(new Event("jobcompass_applications_changed"));
+
+        showToast("Local data reset");
+    }
+
+
     return (
         <AppShell>
             <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -178,7 +203,9 @@ export default function SettingsPage() {
                             </p>
 
                             <Button
+                                type="button"
                                 variant="outline"
+                                onClick={handleResetLocalData}
                                 className="mt-5 h-11 rounded-2xl border-red-200 bg-white px-6 text-red-700 hover:bg-red-50"
                             >
                                 Reset local data
@@ -202,6 +229,7 @@ export default function SettingsPage() {
                     </Card>
                 </aside>
             </section>
+            <AppToast message={toastMessage} />
         </AppShell>
     );
 }

@@ -69,9 +69,14 @@ export function useSavedJobs() {
     writeSavedJobsToStorage(nextIds);
   }
 
+  function resetSavedJobs() {
+  writeSavedJobsToStorage([]);
+}
+
   return {
     savedJobIds,
     isJobSaved,
     toggleSavedJob,
+    resetSavedJobs,
   };
 }

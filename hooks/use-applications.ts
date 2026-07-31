@@ -71,7 +71,8 @@ export function useApplications() {
   };
 
   function resetApplications() {
-    writeApplicationsToStorage(mockApplications);
+    window.localStorage.removeItem(STORAGE_KEY);
+    window.dispatchEvent(new Event(EVENT_KEY));
   }
 
   return {
