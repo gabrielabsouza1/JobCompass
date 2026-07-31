@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useState } from "react";
 import { AppToast } from "@/components/ui/app-toast";
+import { useToast } from "@/hooks/use-toast";
 
 const settingsSections = [
     {
@@ -46,15 +47,7 @@ const settingsSections = [
 ];
 
 export default function SettingsPage() {
-    const [toastMessage, setToastMessage] = useState("");
-
-    function showToast(message: string) {
-        setToastMessage(message);
-
-        window.setTimeout(() => {
-            setToastMessage("");
-        }, 2500);
-    }
+    const { toastMessage, showToast } = useToast();
 
     function handleResetLocalData() {
         window.localStorage.removeItem("jobcompass_saved_jobs");

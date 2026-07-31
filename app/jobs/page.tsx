@@ -17,13 +17,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { JobCard } from "@/components/jobs/job-card";
 import { AppToast } from "@/components/ui/app-toast";
+import { useToast } from "@/hooks/use-toast";
 
 export default function JobsPage() {
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
+  const { toastMessage, showToast } = useToast();
   const [sourceFilter, setSourceFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
 
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
@@ -61,14 +62,6 @@ export default function JobsPage() {
   });
 
   const availableSources = ["All", ...new Set(mockJobs.map((job) => job.source))];
-
-  function showToast(message: string) {
-  setToastMessage(message);
-
-  window.setTimeout(() => {
-    setToastMessage("");
-  }, 2500);
-}
 
 function handleToggleSavedJob(jobId: string) {
   const wasSaved = isJobSaved(jobId);

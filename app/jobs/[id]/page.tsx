@@ -26,29 +26,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { useState } from "react";
 import { AppToast } from "@/components/ui/app-toast";
+import { useToast } from "@/hooks/use-toast";
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
-  const [toastMessage, setToastMessage] = useState("");
+  const { toastMessage, showToast } = useToast();
 
   const job = mockJobs.find((item) => item.id === params.id);
 
-  function showToast(message: string) {
-  setToastMessage(message);
+  function handleToggleSavedJob(jobId: string) {
+    const wasSaved = isJobSaved(jobId);
 
-  window.setTimeout(() => {
-    setToastMessage("");
-  }, 2500);
-}
+    toggleSavedJob(jobId);
 
-function handleToggleSavedJob(jobId: string) {
-  const wasSaved = isJobSaved(jobId);
-
-  toggleSavedJob(jobId);
-
-  showToast(wasSaved ? "Job removed from saved" : "Job saved");
-}
+    showToast(wasSaved ? "Job removed from saved" : "Job saved");
+  }
 
   if (!job) {
     return (
@@ -155,8 +148,8 @@ function handleToggleSavedJob(jobId: string) {
                 <Button
                   onClick={() => handleToggleSavedJob(job.id)}
                   className={`h-12 rounded-2xl px-6 ${isJobSaved(job.id)
-                      ? "bg-teal-700 hover:bg-teal-800"
-                      : "bg-teal-600 hover:bg-teal-700"
+                    ? "bg-teal-700 hover:bg-teal-800"
+                    : "bg-teal-600 hover:bg-teal-700"
                     }`}
                 >
                   <Bookmark

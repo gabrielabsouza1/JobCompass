@@ -14,10 +14,11 @@ import { AddApplicationModal } from "@/components/tracker/add-application-modal"
 import { ApplicationColumn } from "@/components/tracker/application-column";
 import { useApplicationTracker } from "@/hooks/use-application-tracker";
 import { AppToast } from "@/components/ui/app-toast";
+import { useToast } from "@/hooks/use-toast";
 
 export default function TrackerPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState("");
+  const { toastMessage, showToast } = useToast();
 
   const {
     jobs,
@@ -26,16 +27,7 @@ export default function TrackerPage() {
     applicationColumns,
     totalApplications,
     handleAddApplication,
-    resetApplications,
   } = useApplicationTracker();
-
-  function showToast(message: string) {
-    setToastMessage(message);
-
-    window.setTimeout(() => {
-      setToastMessage("");
-    }, 2500);
-  }
 
   function handleSaveApplication() {
     handleAddApplication();
@@ -60,26 +52,12 @@ export default function TrackerPage() {
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              resetApplications?.();
-              showToast("Mock data reset");
-            }}
-            className="h-11 rounded-2xl border-slate-200 bg-white px-6"
-          >
-            Reset mock data
-          </Button>
-
-          <Button
-            onClick={() => setIsAddModalOpen(true)}
-            className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
-          >
-            Add application
-          </Button>
-        </div>
+        <Button
+          onClick={() => setIsAddModalOpen(true)}
+          className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+        >
+          Add application
+        </Button>
       </div>
 
       <section className="mb-6 grid gap-4 md:grid-cols-4">

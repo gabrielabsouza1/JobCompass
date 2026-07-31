@@ -23,7 +23,7 @@ type ApplicationItem = {
 
 export function useApplicationTracker() {
     const { savedJobIds } = useSavedJobs();
-    const { applications, addApplication, resetApplications } = useApplications();
+    const { applications, addApplication } = useApplications();
 
     const [newApplication, setNewApplication] = useState({
         jobId: mockJobs[0]?.id ?? "",
@@ -138,6 +138,5 @@ export function useApplicationTracker() {
         applicationColumns,
         totalApplications,
         handleAddApplication,
-        resetApplications,
     };
 }

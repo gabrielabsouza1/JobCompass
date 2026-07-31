@@ -71,9 +71,9 @@ export function useApplications() {
   };
 
   function resetApplications() {
-    window.localStorage.removeItem(STORAGE_KEY);
-    window.dispatchEvent(new Event(EVENT_KEY));
-  }
+  window.localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new Event(EVENT_KEY));
+}
 
   return {
     applications,

@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Check,
@@ -13,6 +15,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { AppToast } from "@/components/ui/app-toast";
+import { useJobSources } from "@/hooks/use-job-sources";
+import { useToast } from "@/hooks/use-toast";
 
 const jobSources = [
   {
@@ -111,7 +116,12 @@ function getIcon(category: string) {
 }
 
 export default function SourcesPage() {
-  const selectedSources = jobSources.filter((source) => source.selected);
+  const { selectedSourceIds, isSourceSelected, toggleSource } = useJobSources();
+  const { toastMessage, showToast } = useToast();
+
+  const selectedSources = jobSources.filter((source) =>
+    selectedSourceIds.includes(source.id)
+  );
 
   return (
     <AppShell>
@@ -131,7 +141,11 @@ export default function SourcesPage() {
           </p>
         </div>
 
-        <Button className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
+        <Button
+          type="button"
+          onClick={() => showToast("Sources saved")}
+          className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+        >
           Save sources
         </Button>
       </div>
@@ -213,13 +227,12 @@ export default function SourcesPage() {
       <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {jobSources.map((source) => {
           const Icon = getIcon(source.category);
+          const isSelected = isSourceSelected(source.id);
 
           return (
             <Card
               key={source.id}
-              className={`rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
-                source.selected ? "border-teal-200 ring-4 ring-teal-50" : ""
-              }`}
+              className={`rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-teal-200 ring-4 ring-teal-50" : ""}}`}
             >
               <CardContent className="p-5">
                 <div className="mb-5 flex items-start justify-between gap-4">
@@ -249,14 +262,21 @@ export default function SourcesPage() {
 
                   <button
                     type="button"
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition ${
-                      source.selected
+                    onClick={() => {
+                      if (!isSelected && selectedSourceIds.length >= 5) {
+                        showToast("You can select up to 5 sources");
+                        return;
+                      }
+
+                      toggleSource(source.id);
+                    }}
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition ${isSelected
                         ? "border-teal-200 bg-teal-600 text-white"
                         : "border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
-                    }`}
-                    aria-label={`Select ${source.name}`}
+                      }`}
+                    aria-label={isSelected ? `Unselect ${source.name}` : `Select ${source.name}`}
                   >
-                    {source.selected ? <Check className="h-5 w-5" /> : null}
+                    {isSelected ? <Check className="h-5 w-5" /> : null}
                   </button>
                 </div>
 
@@ -302,6 +322,7 @@ export default function SourcesPage() {
           <Link href="/jobs">Continue to jobs</Link>
         </Button>
       </div>
+      <AppToast message={toastMessage} />
     </AppShell>
   );
 }
