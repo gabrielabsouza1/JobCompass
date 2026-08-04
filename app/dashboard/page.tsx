@@ -7,29 +7,32 @@ import {
   Send,
   ShieldAlert,
   TrendingUp,
-  Link,
 } from "lucide-react";
+import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { mockJobs } from "@/data/mock-data";
-import { Badge } from "@/components/ui/badge";
+import { TopJobCard } from "@/components/dashboard/top-job-card";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { useApplications } from "@/hooks/use-applications";
 import { useJobSources } from "@/hooks/use-job-sources";
+
 
 function StatCard({
   label,
   value,
   icon: Icon,
   helper,
+  href,
 }: {
   label: string;
   value: string | number;
   icon: React.ElementType;
   helper?: string;
+  href?: string;
 }) {
-  return (
-    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+  const content = (
+    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md">
       <CardContent className="flex items-center gap-4 p-5">
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 text-teal-700">
           <Icon className="h-6 w-6" />
@@ -46,6 +49,16 @@ function StatCard({
         </div>
       </CardContent>
     </Card>
+  );
+
+  if (!href) {
+    return content;
+  }
+
+  return (
+    <Link href={href} className="block">
+      {content}
+    </Link>
   );
 }
 
@@ -123,30 +136,39 @@ export default function DashboardPage() {
           value={visibleJobs.length}
           icon={BriefcaseBusiness}
           helper="From selected sources"
+          href="/jobs"
         />
+
         <StatCard
           label="Saved jobs"
           value={savedJobIds.length}
           icon={Bookmark}
           helper="View saved jobs"
+          href="/saved"
         />
+
         <StatCard
           label="Applications sent"
           value={applicationsSent}
           icon={Send}
           helper="Tracked applications"
+          href="/tracker"
         />
+
         <StatCard
           label="Interviews upcoming"
           value={interviewsUpcoming}
           icon={CalendarDays}
           helper="View tracker"
+          href="/tracker"
         />
+
         <StatCard
           label="Best source"
           value={bestSourceName}
           icon={TrendingUp}
           helper="Based on visible jobs"
+          href="/sources"
         />
       </section>
 
@@ -181,26 +203,7 @@ export default function DashboardPage() {
         {visibleJobs.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-3">
             {visibleJobs.slice(0, 3).map((job) => (
-              <Card
-                key={job.id}
-                className="rounded-3xl border-slate-200 bg-white shadow-sm"
-              >
-                <CardContent className="p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 font-bold text-slate-700">
-                      {job.source.slice(0, 1)}
-                    </div>
-
-                    <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
-                      {job.matchScore}% match
-                    </Badge>
-                  </div>
-
-                  <h3 className="font-semibold text-slate-950">{job.title}</h3>
-                  <p className="text-sm text-slate-500">{job.company}</p>
-                  <p className="mt-2 text-sm text-slate-500">{job.location}</p>
-                </CardContent>
-              </Card>
+              <TopJobCard key={job.id} job={job} />
             ))}
           </div>
         ) : (

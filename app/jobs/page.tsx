@@ -21,7 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useJobSources } from "@/hooks/use-job-sources";
 
 export default function JobsPage() {
-  const { isJobSaved, toggleSavedJob } = useSavedJobs();
+  const { savedJobIds, isJobSaved, toggleSavedJob } = useSavedJobs();
   const { toastMessage, showToast } = useToast();
   const { selectedSourceIds } = useJobSources();
   const [sourceFilter, setSourceFilter] = useState("All");
@@ -108,9 +108,21 @@ export default function JobsPage() {
           </p>
         </div>
 
-        <Button className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
-          Refresh jobs
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Link
+            href="/saved"
+            className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 transition hover:bg-teal-50 hover:text-teal-700"
+          >
+            View saved jobs
+            <span className="ml-2 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-700">
+              {savedJobIds.length}
+            </span>
+          </Link>
+
+          <Button className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
+            Refresh jobs
+          </Button>
+        </div>
       </div>
 
       <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -200,7 +212,7 @@ export default function JobsPage() {
                 />
               ))
             ) : (
-              <div className="rounded-[2rem] border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
+              <div className="rounded-4xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-3xl">
                   🧭
                 </div>

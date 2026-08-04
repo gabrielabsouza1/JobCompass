@@ -9,12 +9,14 @@ import {
   Globe2,
   UserCircle,
   ShieldCheck,
-  Settings
+  Settings,
+  Bookmark,
 } from "lucide-react";
 
 const navItems = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
+  { label: "Saved", href: "/saved", icon: Bookmark },
   { label: "Tracker", href: "/tracker", icon: ClipboardCheck },
   { label: "Sources", href: "/sources", icon: Globe2 },
   { label: "Profile", href: "/profile", icon: UserCircle },
