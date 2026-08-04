@@ -2,11 +2,10 @@
 
 import Link from "next/link";
 import { Bookmark, Search } from "lucide-react";
-
 import { AppShell } from "@/components/layout/app-shell";
 import { JobCard } from "@/components/jobs/job-card";
 import { AppToast } from "@/components/ui/app-toast";
-import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { mockJobs } from "@/data/mock-data";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { useToast } from "@/hooks/use-toast";
@@ -64,29 +63,13 @@ export default function SavedJobsPage() {
                     ))}
                 </section>
             ) : (
-                <Card className="rounded-4xl border-dashed border-slate-300 bg-white shadow-sm">
-                    <CardContent className="p-8 text-center">
-                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-teal-700">
-                            <Bookmark className="h-8 w-8" />
-                        </div>
-
-                        <h2 className="mt-5 text-2xl font-bold text-slate-950">
-                            No saved jobs yet
-                        </h2>
-
-                        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-                            Save jobs from your job feed to review them later or move them
-                            into your application tracker.
-                        </p>
-
-                        <Link
-                            href="/jobs"
-                            className="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700"
-                        >
-                            Browse jobs
-                        </Link>
-                    </CardContent>
-                </Card>
+                <EmptyState
+                    icon={<Bookmark className="h-8 w-8" />}
+                    title="No saved jobs yet"
+                    description="Save jobs from your job feed to review them later or move them into your application tracker."
+                    actionLabel="Browse jobs"
+                    actionHref="/jobs"
+                />
             )}
 
             <AppToast message={toastMessage} />

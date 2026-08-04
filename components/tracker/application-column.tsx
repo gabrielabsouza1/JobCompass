@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import type { Job } from "@/types";
 import type { MockApplication } from "@/data/mock-applications";
 import { ApplicationCard } from "@/components/tracker/application-card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type ApplicationItem = {
   job: Job;

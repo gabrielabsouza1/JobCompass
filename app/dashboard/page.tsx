@@ -11,6 +11,7 @@ import {
 import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { mockJobs } from "@/data/mock-data";
 import { TopJobCard } from "@/components/dashboard/top-job-card";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
@@ -207,27 +208,12 @@ export default function DashboardPage() {
             ))}
           </div>
         ) : (
-          <div className="rounded-4xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-sm">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-teal-50 text-3xl">
-              🧭
-            </div>
-
-            <h3 className="mt-5 text-2xl font-bold text-slate-950">
-              No matched jobs yet
-            </h3>
-
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-600">
-              Your selected sources do not have matching mock jobs right now. Try
-              managing your job sources to see more opportunities.
-            </p>
-
-            <Link
-              href="/sources"
-              className="mt-6 inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-5 text-sm font-semibold text-white transition hover:bg-teal-700"
-            >
-              Manage job sources
-            </Link>
-          </div>
+          <EmptyState
+            title="No matched jobs yet"
+            description="Your selected sources do not have matching mock jobs right now. Try managing your job sources to see more opportunities."
+            actionLabel="Manage job sources"
+            actionHref="/sources"
+          />
         )}
       </section>
     </AppShell>
