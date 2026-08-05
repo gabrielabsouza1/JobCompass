@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -13,12 +14,14 @@ import {
   Sparkles,
   UserCircle,
 } from "lucide-react";
-
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { createClient } from "@/lib/supabase/client";
+import { AppToast } from "@/components/ui/app-toast";
+import { useToast } from "@/hooks/use-toast";
 
 const targetRoles = [
   "QA Tester",
@@ -63,6 +66,44 @@ const preferences = [
 
 export default function ProfilePage() {
   const { user } = useCurrentUser();
+  const { toastMessage, showToast } = useToast();
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  async function handleUpdateProfile(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!user) {
+      return;
+    }
+
+    setIsSaving(true);
+    setErrorMessage("");
+
+    const supabase = createClient();
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: fullName.trim(),
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSaving(false);
+      return;
+    }
+
+    setIsSaving(false);
+    setIsEditModalOpen(false);
+    showToast("Profile updated");
+
+    window.location.reload();
+  }
 
   return (
     <AppShell>
@@ -82,7 +123,15 @@ export default function ProfilePage() {
           </p>
         </div>
 
-        <Button className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
+        <Button
+          type="button"
+          onClick={() => {
+            setFullName(user?.fullName ?? "");
+            setErrorMessage("");
+            setIsEditModalOpen(true);
+          }}
+          className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+        >
           <Pencil className="mr-2 h-4 w-4" />
           Edit profile
         </Button>
@@ -357,6 +406,102 @@ export default function ProfilePage() {
           </Card>
         </aside>
       </section>
+      {isEditModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
+          <div className="w-full max-w-lg rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl">
+            <div className="mb-6 flex items-start justify-between gap-4">
+              <div>
+                <p className="mb-2 inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
+                  Edit profile
+                </p>
+
+                <h2 className="text-2xl font-bold text-slate-950">
+                  Update your profile
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  This information is saved to your Supabase profile.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditModalOpen(false);
+                  setErrorMessage("");
+                  setFullName(user?.fullName ?? "");
+                }}
+                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-900"
+                aria-label="Close edit profile modal"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Full name
+                </label>
+
+                <input
+                  value={fullName}
+                  onChange={(event) => setFullName(event.target.value)}
+                  required
+                  placeholder="Your full name"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Email
+                </label>
+
+                <input
+                  value={user?.email ?? ""}
+                  disabled
+                  className="h-12 w-full cursor-not-allowed rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-500 outline-none"
+                />
+
+                <p className="mt-2 text-xs text-slate-500">
+                  Email editing will be added later.
+                </p>
+              </div>
+
+              {errorMessage ? (
+                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+                  {errorMessage}
+                </div>
+              ) : null}
+
+              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    setErrorMessage("");
+                    setFullName(user?.fullName ?? "");
+                  }}
+                  className="h-11 rounded-2xl border-slate-200 px-6"
+                >
+                  Cancel
+                </Button>
+
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSaving ? "Saving..." : "Save changes"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+      <AppToast message={toastMessage} />
     </AppShell>
   );
 }
