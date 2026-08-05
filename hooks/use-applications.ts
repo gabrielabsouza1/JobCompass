@@ -1,82 +1,146 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import {
-  mockApplications,
-  type MockApplication,
-} from "@/data/mock-applications";
+import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "jobcompass_applications";
-const EVENT_KEY = "jobcompass_applications_changed";
+import { createClient } from "@/lib/supabase/client";
+import type { MockApplication } from "@/data/mock-applications";
+import type { ApplicationStatus } from "@/types";
 
-function readApplicationsFromStorage(): MockApplication[] {
-  if (typeof window === "undefined") {
-    return mockApplications;
-  }
+type ApplicationRow = {
+  id: string;
+  job_id: string;
+  status: ApplicationStatus;
+  next_step: string;
+  notes: string | null;
+  applied_at: string | null;
+};
 
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-
-  if (!saved) {
-    return mockApplications;
-  }
-
-  try {
-    return JSON.parse(saved) as MockApplication[];
-  } catch {
-    return mockApplications;
-  }
-}
-
-function writeApplicationsToStorage(applications: MockApplication[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(applications));
-  window.dispatchEvent(new Event(EVENT_KEY));
-}
-
-function subscribe(callback: () => void) {
-  window.addEventListener(EVENT_KEY, callback);
-  window.addEventListener("storage", callback);
-
-  return () => {
-    window.removeEventListener(EVENT_KEY, callback);
-    window.removeEventListener("storage", callback);
+function mapApplicationFromDatabase(row: ApplicationRow): MockApplication {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    status: row.status,
+    nextStep: row.next_step,
+    notes: row.notes ?? undefined,
+    appliedAt: row.applied_at ?? undefined,
   };
-}
-
-function getSnapshot() {
-  return JSON.stringify(readApplicationsFromStorage());
-}
-
-function getServerSnapshot() {
-  return JSON.stringify(mockApplications);
 }
 
 export function useApplications() {
-  const applicationsSnapshot = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    getServerSnapshot
-  );
+  const [applications, setApplications] = useState<MockApplication[]>([]);
+  const [isLoadingApplications, setIsLoadingApplications] = useState(true);
 
-  const applications = JSON.parse(applicationsSnapshot) as MockApplication[];
+  useEffect(() => {
+    let isMounted = true;
 
-  function addApplication(application: MockApplication) {
-    const currentApplications = readApplicationsFromStorage();
+    async function loadApplications() {
+      const supabase = createClient();
 
-    writeApplicationsToStorage([...currentApplications, application]);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!user) {
+        setApplications([]);
+        setIsLoadingApplications(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("applications")
+        .select("id, job_id, status, next_step, notes, applied_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.error(error);
+        setApplications([]);
+        setIsLoadingApplications(false);
+        return;
+      }
+
+      setApplications((data as ApplicationRow[]).map(mapApplicationFromDatabase));
+      setIsLoadingApplications(false);
+    }
+
+    loadApplications();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  async function addApplication(application: MockApplication) {
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("applications")
+      .insert({
+        user_id: user.id,
+        job_id: application.jobId,
+        status: application.status,
+        next_step: application.nextStep,
+        notes: application.notes ?? null,
+        applied_at: application.appliedAt ?? null,
+      })
+      .select("id, job_id, status, next_step, notes, applied_at")
+      .single();
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setApplications((currentApplications) => [
+      mapApplicationFromDatabase(data as ApplicationRow),
+      ...currentApplications,
+    ]);
+  }
+
+  async function resetApplications() {
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setApplications([]);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("applications")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setApplications([]);
   }
 
   return {
     applications,
-    addApplication,
-  };
-
-  function resetApplications() {
-  window.localStorage.removeItem(STORAGE_KEY);
-  window.dispatchEvent(new Event(EVENT_KEY));
-}
-
-  return {
-    applications,
+    isLoadingApplications,
     addApplication,
     resetApplications,
   };

@@ -15,9 +15,9 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useState } from "react";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
+import { createClient } from "@/lib/supabase/client";
 
 const settingsSections = [
     {
@@ -49,14 +49,44 @@ const settingsSections = [
 export default function SettingsPage() {
     const { toastMessage, showToast } = useToast();
 
-    function handleResetLocalData() {
+    async function handleResetLocalData() {
+        const supabase = createClient();
+
+        const {
+            data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+            showToast("You need to be logged in");
+            return;
+        }
+
+        const { error: savedJobsError } = await supabase
+            .from("saved_jobs")
+            .delete()
+            .eq("user_id", user.id);
+
+        if (savedJobsError) {
+            console.error(savedJobsError);
+            showToast("Could not reset saved jobs");
+            return;
+        }
+
+        const { error: applicationsError } = await supabase
+            .from("applications")
+            .delete()
+            .eq("user_id", user.id);
+
+        if (applicationsError) {
+            console.error(applicationsError);
+            showToast("Could not reset applications");
+            return;
+        }
+
         window.localStorage.removeItem("jobcompass_saved_jobs");
         window.localStorage.removeItem("jobcompass_applications");
 
-        window.dispatchEvent(new Event("jobcompass_saved_jobs_changed"));
-        window.dispatchEvent(new Event("jobcompass_applications_changed"));
-
-        showToast("Local data reset");
+        showToast("Saved jobs and tracker reset");
     }
 
 
@@ -191,8 +221,7 @@ export default function SettingsPage() {
                             <h2 className="font-bold text-slate-950">Mock data</h2>
 
                             <p className="mt-2 text-sm leading-6 text-slate-600">
-                                Later this area can reset saved jobs, applications and profile
-                                preferences stored locally.
+                                Remove your saved jobs and application tracker data from this account.
                             </p>
 
                             <Button
@@ -201,7 +230,7 @@ export default function SettingsPage() {
                                 onClick={handleResetLocalData}
                                 className="mt-5 h-11 rounded-2xl border-red-200 bg-white px-6 text-red-700 hover:bg-red-50"
                             >
-                                Reset local data
+                                Reset saved jobs and tracker
                             </Button>
                         </CardContent>
                     </Card>
