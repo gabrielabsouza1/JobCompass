@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, LogOut, Search } from "lucide-react";
-
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { createClient } from "@/lib/supabase/client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 export function Topbar() {
   const router = useRouter();
   const supabase = createClient();
+  const { user } = useCurrentUser();
 
   async function handleLogout() {
     await supabase.auth.signOut();
@@ -58,7 +59,7 @@ export function Topbar() {
 
         <Avatar className="h-10 w-10 lg:h-11 lg:w-11">
           <AvatarFallback className="bg-teal-100 font-semibold text-teal-700">
-            G
+            {user?.initial ?? "U"}
           </AvatarFallback>
         </Avatar>
       </div>

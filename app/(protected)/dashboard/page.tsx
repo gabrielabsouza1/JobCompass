@@ -17,6 +17,7 @@ import { TopJobCard } from "@/components/dashboard/top-job-card";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { useApplications } from "@/hooks/use-applications";
 import { useJobSources } from "@/hooks/use-job-sources";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 
 function StatCard({
@@ -67,6 +68,7 @@ export default function DashboardPage() {
   const { savedJobIds } = useSavedJobs();
   const { applications } = useApplications();
   const { selectedSourceIds } = useJobSources();
+  const { user } = useCurrentUser();
 
   const visibleJobs = mockJobs.filter((job) =>
     selectedSourceIds.some((sourceId) =>
@@ -113,7 +115,10 @@ export default function DashboardPage() {
 
             <h1 className="text-4xl font-bold tracking-tight text-slate-950 lg:text-5xl">
               Good morning,{" "}
-              <span className="text-teal-600">Gabriela</span> 👋
+              <span className="text-teal-600">
+                {user?.fullName.split(" ")[0] ?? "there"}
+              </span>{" "}
+              👋
             </h1>
 
             <p className="mt-4 max-w-2xl text-lg text-slate-600">
