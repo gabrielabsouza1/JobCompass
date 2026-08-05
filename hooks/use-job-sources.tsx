@@ -1,9 +1,8 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "jobcompass_selected_sources";
-const EVENT_KEY = "jobcompass_selected_sources_changed";
+import { createClient } from "@/lib/supabase/client";
 
 const DEFAULT_SELECTED_SOURCES = [
   "adzuna",
@@ -13,83 +12,189 @@ const DEFAULT_SELECTED_SOURCES = [
   "linkedin",
 ];
 
-function readSelectedSourcesFromStorage(): string[] {
-  if (typeof window === "undefined") {
-    return DEFAULT_SELECTED_SOURCES;
-  }
-
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-
-  if (!saved) {
-    return DEFAULT_SELECTED_SOURCES;
-  }
-
-  try {
-    return JSON.parse(saved) as string[];
-  } catch {
-    return DEFAULT_SELECTED_SOURCES;
-  }
-}
-
-function writeSelectedSourcesToStorage(sourceIds: string[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sourceIds));
-  window.dispatchEvent(new Event(EVENT_KEY));
-}
-
-function subscribe(callback: () => void) {
-  window.addEventListener(EVENT_KEY, callback);
-  window.addEventListener("storage", callback);
-
-  return () => {
-    window.removeEventListener(EVENT_KEY, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
-
-function getSnapshot() {
-  return JSON.stringify(readSelectedSourcesFromStorage());
-}
-
-function getServerSnapshot() {
-  return JSON.stringify(DEFAULT_SELECTED_SOURCES);
-}
+type UserSourceRow = {
+  source_id: string;
+};
 
 export function useJobSources() {
-  const selectedSourcesSnapshot = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    getServerSnapshot
-  );
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>([]);
+  const [isLoadingSources, setIsLoadingSources] = useState(true);
 
-  const selectedSourceIds = JSON.parse(selectedSourcesSnapshot) as string[];
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSources() {
+      const supabase = createClient();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!user) {
+        setSelectedSourceIds(DEFAULT_SELECTED_SOURCES);
+        setIsLoadingSources(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("user_sources")
+        .select("source_id")
+        .eq("user_id", user.id);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.error(error);
+        setSelectedSourceIds(DEFAULT_SELECTED_SOURCES);
+        setIsLoadingSources(false);
+        return;
+      }
+
+      if (data.length === 0) {
+        const { error: insertError } = await supabase.from("user_sources").insert(
+          DEFAULT_SELECTED_SOURCES.map((sourceId) => ({
+            user_id: user.id,
+            source_id: sourceId,
+          }))
+        );
+
+        if (insertError) {
+          console.error(insertError);
+        }
+
+        setSelectedSourceIds(DEFAULT_SELECTED_SOURCES);
+        setIsLoadingSources(false);
+        return;
+      }
+
+      setSelectedSourceIds(
+        (data as UserSourceRow[]).map((source) => source.source_id)
+      );
+      setIsLoadingSources(false);
+    }
+
+    loadSources();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function isSourceSelected(sourceId: string) {
     return selectedSourceIds.includes(sourceId);
   }
 
-  function toggleSource(sourceId: string) {
-    const currentSourceIds = readSelectedSourcesFromStorage();
+  async function toggleSource(sourceId: string) {
+    const supabase = createClient();
 
-    if (currentSourceIds.includes(sourceId)) {
-      writeSelectedSourcesToStorage(
-        currentSourceIds.filter((id) => id !== sourceId)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return;
+    }
+
+    const alreadySelected = selectedSourceIds.includes(sourceId);
+
+    if (alreadySelected) {
+      const { error } = await supabase
+        .from("user_sources")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("source_id", sourceId);
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      setSelectedSourceIds((currentSources) =>
+        currentSources.filter((id) => id !== sourceId)
       );
+
       return;
     }
 
-    if (currentSourceIds.length >= 5) {
+    if (selectedSourceIds.length >= 5) {
       return;
     }
 
-    writeSelectedSourcesToStorage([...currentSourceIds, sourceId]);
+    const { error } = await supabase.from("user_sources").upsert(
+      {
+        user_id: user.id,
+        source_id: sourceId,
+      },
+      {
+        onConflict: "user_id,source_id",
+        ignoreDuplicates: true,
+      }
+    );
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setSelectedSourceIds((currentSources) => {
+      if (currentSources.includes(sourceId)) {
+        return currentSources;
+      }
+
+      return [...currentSources, sourceId];
+    });
   }
 
-  function resetSources() {
-    writeSelectedSourcesToStorage(DEFAULT_SELECTED_SOURCES);
+  async function resetSources() {
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSelectedSourceIds(DEFAULT_SELECTED_SOURCES);
+      return;
+    }
+
+    const { error: deleteError } = await supabase
+      .from("user_sources")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (deleteError) {
+      console.error(deleteError);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from("user_sources").upsert(
+      DEFAULT_SELECTED_SOURCES.map((sourceId) => ({
+        user_id: user.id,
+        source_id: sourceId,
+      })),
+      {
+        onConflict: "user_id,source_id",
+        ignoreDuplicates: true,
+      }
+    );
+
+    if (insertError) {
+      console.error(insertError);
+      return;
+    }
+
+    setSelectedSourceIds(DEFAULT_SELECTED_SOURCES);
   }
 
   return {
     selectedSourceIds,
+    isLoadingSources,
     isSourceSelected,
     toggleSource,
     resetSources,
