@@ -1,3 +1,5 @@
+"use client";
+
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -16,6 +18,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 const targetRoles = [
   "QA Tester",
@@ -59,6 +62,8 @@ const preferences = [
 ];
 
 export default function ProfilePage() {
+  const { user } = useCurrentUser();
+
   return (
     <AppShell>
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -87,17 +92,17 @@ export default function ProfilePage() {
         <main className="space-y-6">
           <Card className="overflow-hidden rounded-3xl border-slate-200 bg-white shadow-sm">
             <CardContent className="p-0">
-              <div className="bg-gradient-to-br from-teal-50 via-sky-50 to-white p-6 lg:p-8">
+              <div className="bg-linear-to-br from-teal-50 via-sky-50 to-white p-6 lg:p-8">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-5">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-teal-700 shadow-sm">
-                      <UserCircle className="h-12 w-12" />
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white text-3xl font-bold text-teal-700 shadow-sm">
+                      {user?.initial ?? <UserCircle className="h-12 w-12" />}
                     </div>
 
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <h2 className="text-3xl font-bold text-slate-950">
-                          Gabriela Souza
+                          {user?.fullName ?? "Loading profile..."}
                         </h2>
 
                         <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
@@ -107,8 +112,11 @@ export default function ProfilePage() {
                       </div>
 
                       <p className="mt-2 text-slate-600">
-                        Looking for QA, testing and entry-level tech roles in
-                        Australia.
+                        {user?.email ?? "Loading email..."}
+                      </p>
+
+                      <p className="mt-1 text-sm text-slate-500">
+                        Looking for QA, testing and entry-level tech roles in Australia.
                       </p>
                     </div>
                   </div>
