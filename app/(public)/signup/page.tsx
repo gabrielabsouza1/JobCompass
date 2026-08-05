@@ -25,7 +25,10 @@ export default function SignupPage() {
     setMessage("");
     setErrorMessage("");
 
-    const { error } = await supabase.auth.signUp({
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -39,6 +42,20 @@ export default function SignupPage() {
       setErrorMessage(error.message);
       setIsLoading(false);
       return;
+    }
+
+    if (user) {
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id: user.id,
+        full_name: fullName,
+        email,
+      });
+
+      if (profileError) {
+        setErrorMessage(profileError.message);
+        setIsLoading(false);
+        return;
+      }
     }
 
     setMessage("Account created. Check your email to confirm your account.");
