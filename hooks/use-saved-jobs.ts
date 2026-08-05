@@ -1,80 +1,137 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 
-const STORAGE_KEY = "jobcompass_saved_jobs";
-const EVENT_KEY = "jobcompass_saved_jobs_changed";
-
-function readSavedJobsFromStorage() {
-  if (typeof window === "undefined") {
-    return [];
-  }
-
-  const saved = window.localStorage.getItem(STORAGE_KEY);
-
-  if (!saved) {
-    return [];
-  }
-
-  try {
-    return JSON.parse(saved) as string[];
-  } catch {
-    return [];
-  }
-}
-
-function writeSavedJobsToStorage(jobIds: string[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(jobIds));
-  window.dispatchEvent(new Event(EVENT_KEY));
-}
-
-function subscribe(callback: () => void) {
-  window.addEventListener(EVENT_KEY, callback);
-  window.addEventListener("storage", callback);
-
-  return () => {
-    window.removeEventListener(EVENT_KEY, callback);
-    window.removeEventListener("storage", callback);
-  };
-}
-
-function getSnapshot() {
-  return JSON.stringify(readSavedJobsFromStorage());
-}
-
-function getServerSnapshot() {
-  return JSON.stringify([]);
-}
+import { createClient } from "@/lib/supabase/client";
 
 export function useSavedJobs() {
-  const savedJobIdsSnapshot = useSyncExternalStore(
-    subscribe,
-    getSnapshot,
-    getServerSnapshot
-  );
+  const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
+  const [isLoadingSavedJobs, setIsLoadingSavedJobs] = useState(true);
 
-  const savedJobIds = JSON.parse(savedJobIdsSnapshot) as string[];
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadSavedJobs() {
+      const supabase = createClient();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!user) {
+        setSavedJobIds([]);
+        setIsLoadingSavedJobs(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("saved_jobs")
+        .select("job_id")
+        .eq("user_id", user.id);
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (error) {
+        console.error(error);
+        setSavedJobIds([]);
+        setIsLoadingSavedJobs(false);
+        return;
+      }
+
+      setSavedJobIds(data.map((item) => item.job_id));
+      setIsLoadingSavedJobs(false);
+    }
+
+    loadSavedJobs();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   function isJobSaved(jobId: string) {
     return savedJobIds.includes(jobId);
   }
 
-  function toggleSavedJob(jobId: string) {
-    const currentIds = readSavedJobsFromStorage();
+  async function toggleSavedJob(jobId: string) {
+    const supabase = createClient();
 
-    const nextIds = currentIds.includes(jobId)
-      ? currentIds.filter((id) => id !== jobId)
-      : [...currentIds, jobId];
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-    writeSavedJobsToStorage(nextIds);
+    if (!user) {
+      return;
+    }
+
+    const alreadySaved = savedJobIds.includes(jobId);
+
+    if (alreadySaved) {
+      const { error } = await supabase
+        .from("saved_jobs")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("job_id", jobId);
+
+      if (error) {
+        console.error(error);
+        return;
+      }
+
+      setSavedJobIds((currentIds) =>
+        currentIds.filter((id) => id !== jobId)
+      );
+
+      return;
+    }
+
+    const { error } = await supabase.from("saved_jobs").insert({
+      user_id: user.id,
+      job_id: jobId,
+    });
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setSavedJobIds((currentIds) => [...currentIds, jobId]);
   }
 
-  function resetSavedJobs() {
-  writeSavedJobsToStorage([]);
-}
+  async function resetSavedJobs() {
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      setSavedJobIds([]);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("saved_jobs")
+      .delete()
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    setSavedJobIds([]);
+  }
 
   return {
     savedJobIds,
+    isLoadingSavedJobs,
     isJobSaved,
     toggleSavedJob,
     resetSavedJobs,
