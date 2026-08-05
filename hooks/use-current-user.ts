@@ -9,6 +9,10 @@ type CurrentUser = {
   email: string;
   fullName: string;
   initial: string;
+  preferredLocation: string;
+  workMode: string;
+  employmentType: string;
+  workRights: string;
 };
 
 function formatName(name: string) {
@@ -42,7 +46,7 @@ export function useCurrentUser() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("full_name, email")
+        .select("full_name, email, preferred_location, work_mode, employment_type, work_rights")
         .eq("id", user.id)
         .single();
 
@@ -59,6 +63,11 @@ export function useCurrentUser() {
         email: profile?.email ?? user.email ?? "",
         fullName,
         initial: fullName.slice(0, 1).toUpperCase(),
+        preferredLocation: profile?.preferred_location ?? "Melbourne, VIC",
+        workMode: profile?.work_mode ?? "Hybrid or Onsite",
+        employmentType: profile?.employment_type ?? "Full-time",
+        workRights:
+          profile?.work_rights ?? "Partner visa · Full-time work allowed",
       });
 
       setIsLoadingUser(false);

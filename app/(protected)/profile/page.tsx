@@ -41,29 +41,6 @@ const skills = [
   "Administration",
 ];
 
-const preferences = [
-  {
-    label: "Preferred location",
-    value: "Melbourne, VIC",
-    icon: MapPin,
-  },
-  {
-    label: "Work mode",
-    value: "Hybrid or Onsite",
-    icon: Globe2,
-  },
-  {
-    label: "Employment type",
-    value: "Full-time",
-    icon: BriefcaseBusiness,
-  },
-  {
-    label: "Work rights",
-    value: "Partner visa · Full-time work allowed",
-    icon: ShieldCheck,
-  },
-];
-
 export default function ProfilePage() {
   const { user } = useCurrentUser();
   const { toastMessage, showToast } = useToast();
@@ -72,6 +49,33 @@ export default function ProfilePage() {
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [preferredLocation, setPreferredLocation] = useState("");
+  const [workMode, setWorkMode] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
+  const [workRights, setWorkRights] = useState("");
+
+  const preferences = [
+    {
+      label: "Preferred location",
+      value: user?.preferredLocation ?? "Loading...",
+      icon: MapPin,
+    },
+    {
+      label: "Work mode",
+      value: user?.workMode ?? "Loading...",
+      icon: Globe2,
+    },
+    {
+      label: "Employment type",
+      value: user?.employmentType ?? "Loading...",
+      icon: BriefcaseBusiness,
+    },
+    {
+      label: "Work rights",
+      value: user?.workRights ?? "Loading...",
+      icon: ShieldCheck,
+    },
+  ];
 
   async function handleUpdateProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,6 +93,10 @@ export default function ProfilePage() {
       .from("profiles")
       .update({
         full_name: fullName.trim(),
+        preferred_location: preferredLocation.trim(),
+        work_mode: workMode.trim(),
+        employment_type: employmentType.trim(),
+        work_rights: workRights.trim(),
       })
       .eq("id", user.id);
 
@@ -127,6 +135,10 @@ export default function ProfilePage() {
           type="button"
           onClick={() => {
             setFullName(user?.fullName ?? "");
+            setPreferredLocation(user?.preferredLocation ?? "");
+            setWorkMode(user?.workMode ?? "");
+            setEmploymentType(user?.employmentType ?? "");
+            setWorkRights(user?.workRights ?? "");
             setErrorMessage("");
             setIsEditModalOpen(true);
           }}
@@ -449,6 +461,62 @@ export default function ProfilePage() {
                   onChange={(event) => setFullName(event.target.value)}
                   required
                   placeholder="Your full name"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Preferred location
+                </label>
+
+                <input
+                  value={preferredLocation}
+                  onChange={(event) => setPreferredLocation(event.target.value)}
+                  required
+                  placeholder="Melbourne, VIC"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Work mode
+                </label>
+
+                <input
+                  value={workMode}
+                  onChange={(event) => setWorkMode(event.target.value)}
+                  required
+                  placeholder="Hybrid or Onsite"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Employment type
+                </label>
+
+                <input
+                  value={employmentType}
+                  onChange={(event) => setEmploymentType(event.target.value)}
+                  required
+                  placeholder="Full-time"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Work rights
+                </label>
+
+                <input
+                  value={workRights}
+                  onChange={(event) => setWorkRights(event.target.value)}
+                  required
+                  placeholder="Partner visa · Full-time work allowed"
                   className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
                 />
               </div>
