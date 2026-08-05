@@ -1,9 +1,24 @@
+"use client";
+
 import Link from "next/link";
-import { Bell, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Bell, LogOut, Search } from "lucide-react";
+
+import { createClient } from "@/lib/supabase/client";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 
 export function Topbar() {
+  const router = useRouter();
+  const supabase = createClient();
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+
+    router.push("/login");
+    router.refresh();
+  }
+
   return (
     <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-4 lg:px-6">
       <Link href="/dashboard" className="flex items-center gap-3 lg:hidden">
@@ -30,6 +45,15 @@ export function Topbar() {
           <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-teal-600 text-xs font-bold text-white">
             2
           </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="hidden h-11 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-red-50 hover:text-red-700 sm:flex"
+        >
+          <LogOut className="h-4 w-4" />
+          Logout
         </button>
 
         <Avatar className="h-10 w-10 lg:h-11 lg:w-11">
