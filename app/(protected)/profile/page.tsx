@@ -14,6 +14,20 @@ import {
   Sparkles,
   UserCircle,
 } from "lucide-react";
+import {
+  employmentTypeOptions,
+  getOptionLabel,
+  workModeOptions,
+  workRightsOptions,
+} from "@/data/profile-options";
+import {
+  getCities,
+  getCountries,
+  getStates,
+  type CityOption,
+  type CountryOption,
+  type StateOption,
+} from "@/lib/location-api";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,38 +58,145 @@ const skills = [
 export default function ProfilePage() {
   const { user } = useCurrentUser();
   const { toastMessage, showToast } = useToast();
-
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-  const [preferredLocation, setPreferredLocation] = useState("");
+  const [countryCode, setCountryCode] = useState("");
+  const [countryName, setCountryName] = useState("");
+  const [stateCode, setStateCode] = useState("");
+  const [stateName, setStateName] = useState("");
+  const [cityName, setCityName] = useState("");
   const [workMode, setWorkMode] = useState("");
   const [employmentType, setEmploymentType] = useState("");
   const [workRights, setWorkRights] = useState("");
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [states, setStates] = useState<StateOption[]>([]);
+  const [cities, setCities] = useState<CityOption[]>([]);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
   const preferences = [
     {
       label: "Preferred location",
-      value: user?.preferredLocation ?? "Loading...",
+      value:
+        user?.cityName && user?.stateName && user?.countryName
+          ? `${user.cityName}, ${user.stateName}, ${user.countryName}`
+          : "Not set",
       icon: MapPin,
     },
     {
       label: "Work mode",
-      value: user?.workMode ?? "Loading...",
+      value: user?.workMode
+        ? getOptionLabel(workModeOptions, user.workMode)
+        : "Not set",
       icon: Globe2,
     },
     {
       label: "Employment type",
-      value: user?.employmentType ?? "Loading...",
+      value: user?.employmentType
+        ? getOptionLabel(employmentTypeOptions, user.employmentType)
+        : "Not set",
       icon: BriefcaseBusiness,
     },
     {
       label: "Work rights",
-      value: user?.workRights ?? "Loading...",
+      value: user?.workRights
+        ? getOptionLabel(workRightsOptions, user.workRights)
+        : "Not set",
       icon: ShieldCheck,
     },
   ];
+
+  async function openEditProfileModal() {
+    const currentCountryCode = user?.countryCode ?? "";
+    const currentCountryName = user?.countryName ?? "";
+    const currentStateCode = user?.stateCode ?? "";
+    const currentStateName = user?.stateName ?? "";
+    const currentCityName = user?.cityName ?? "";
+
+    setFullName(user?.fullName ?? "");
+    setCountryCode(currentCountryCode);
+    setCountryName(currentCountryName);
+    setStateCode(currentStateCode);
+    setStateName(currentStateName);
+    setCityName(currentCityName);
+    setWorkMode(user?.workMode ?? "");
+    setEmploymentType(user?.employmentType ?? "");
+    setWorkRights(user?.workRights ?? "");
+    setErrorMessage("");
+    setIsEditModalOpen(true);
+
+    setIsLoadingLocations(true);
+
+    try {
+      const loadedCountries = await getCountries();
+      setCountries(loadedCountries);
+
+      if (currentCountryCode) {
+        const loadedStates = await getStates(currentCountryCode);
+        setStates(loadedStates);
+      } else {
+        setStates([]);
+      }
+
+      if (currentCountryCode && currentStateCode) {
+        const loadedCities = await getCities(currentCountryCode, currentStateCode);
+        setCities(loadedCities);
+      } else {
+        setCities([]);
+      }
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Could not load location options");
+    } finally {
+      setIsLoadingLocations(false);
+    }
+  }
+
+  async function handleCountryChange(nextCountryCode: string) {
+    const selectedCountry = countries.find(
+      (country) => country.iso2 === nextCountryCode
+    );
+
+    setCountryCode(nextCountryCode);
+    setCountryName(selectedCountry?.name ?? "");
+    setStateCode("");
+    setStateName("");
+    setCityName("");
+    setStates([]);
+    setCities([]);
+    setIsLoadingLocations(true);
+
+    try {
+      const loadedStates = await getStates(nextCountryCode);
+      setStates(loadedStates);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Could not load states");
+    } finally {
+      setIsLoadingLocations(false);
+    }
+  }
+
+  async function handleStateChange(nextStateCode: string) {
+    const selectedState = states.find((state) => state.iso2 === nextStateCode);
+
+    setStateCode(nextStateCode);
+    setStateName(selectedState?.name ?? "");
+    setCityName("");
+    setCities([]);
+    setIsLoadingLocations(true);
+
+    try {
+      const loadedCities = await getCities(countryCode, nextStateCode);
+      setCities(loadedCities);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Could not load cities");
+    } finally {
+      setIsLoadingLocations(false);
+    }
+  }
 
   async function handleUpdateProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -93,10 +214,14 @@ export default function ProfilePage() {
       .from("profiles")
       .update({
         full_name: fullName.trim(),
-        preferred_location: preferredLocation.trim(),
-        work_mode: workMode.trim(),
-        employment_type: employmentType.trim(),
-        work_rights: workRights.trim(),
+        country_code: countryCode,
+        country_name: countryName,
+        state_code: stateCode,
+        state_name: stateName,
+        city_name: cityName,
+        work_mode: workMode,
+        employment_type: employmentType,
+        work_rights: workRights,
       })
       .eq("id", user.id);
 
@@ -134,13 +259,7 @@ export default function ProfilePage() {
         <Button
           type="button"
           onClick={() => {
-            setFullName(user?.fullName ?? "");
-            setPreferredLocation(user?.preferredLocation ?? "");
-            setWorkMode(user?.workMode ?? "");
-            setEmploymentType(user?.employmentType ?? "");
-            setWorkRights(user?.workRights ?? "");
-            setErrorMessage("");
-            setIsEditModalOpen(true);
+            void openEditProfileModal();
           }}
           className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
         >
@@ -420,7 +539,7 @@ export default function ProfilePage() {
       </section>
       {isEditModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
-          <div className="w-full max-w-lg rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl">
+          <div className="w-full max-w-lg rounded-4xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="mb-6 flex items-start justify-between gap-4">
               <div>
                 <p className="mb-2 inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
@@ -465,18 +584,77 @@ export default function ProfilePage() {
                 />
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-slate-700">
-                  Preferred location
-                </label>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    Country
+                  </label>
 
-                <input
-                  value={preferredLocation}
-                  onChange={(event) => setPreferredLocation(event.target.value)}
-                  required
-                  placeholder="Melbourne, VIC"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
-                />
+                  <select
+                    value={countryCode}
+                    onChange={(event) => {
+                      void handleCountryChange(event.target.value);
+                    }}
+                    required
+                    disabled={isLoadingLocations}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="" disabled>Select country</option>
+                    {countries.map((country) => (
+                      <option key={country.iso2} value={country.iso2}>
+                        {country.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    State
+                  </label>
+
+                  <select
+                    value={stateCode}
+                    onChange={(event) => {
+                      void handleStateChange(event.target.value);
+                    }}
+                    required
+                    disabled={!countryCode || isLoadingLocations}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="" disabled>
+                      Select state
+                    </option>
+                    {states.map((state) => (
+                      <option key={state.iso2} value={state.iso2}>
+                        {state.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">
+                    City
+                  </label>
+
+                  <select
+                    value={cityName}
+                    onChange={(event) => setCityName(event.target.value)}
+                    required
+                    disabled={!stateCode || isLoadingLocations}
+                    className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    <option value="" disabled>
+                      Select city
+                    </option>
+                    {cities.map((city) => (
+                      <option key={city.name} value={city.name}>
+                        {city.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -484,13 +662,21 @@ export default function ProfilePage() {
                   Work mode
                 </label>
 
-                <input
+                <select
                   value={workMode}
                   onChange={(event) => setWorkMode(event.target.value)}
                   required
-                  placeholder="Hybrid or Onsite"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
-                />
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                >
+                  <option value="" disabled>
+                    Select work mode
+                  </option>
+                  {workModeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -498,13 +684,21 @@ export default function ProfilePage() {
                   Employment type
                 </label>
 
-                <input
+                <select
                   value={employmentType}
                   onChange={(event) => setEmploymentType(event.target.value)}
                   required
-                  placeholder="Full-time"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
-                />
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                >
+                  <option value="" disabled>
+                    Select employment type
+                  </option>
+                  {employmentTypeOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -512,13 +706,21 @@ export default function ProfilePage() {
                   Work rights
                 </label>
 
-                <input
+                <select
                   value={workRights}
                   onChange={(event) => setWorkRights(event.target.value)}
                   required
-                  placeholder="Partner visa · Full-time work allowed"
-                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
-                />
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                >
+                  <option value="" disabled>
+                    Select work rights
+                  </option>
+                  {workRightsOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
