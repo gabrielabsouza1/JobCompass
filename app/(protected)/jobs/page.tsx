@@ -20,6 +20,8 @@ import { JobCard } from "@/components/jobs/job-card";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useJobSources } from "@/hooks/use-job-sources";
+import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
+import { useCurrentUser } from "@/hooks/use-current-user";
 
 export default function JobsPage() {
   const { savedJobIds, isJobSaved, toggleSavedJob } = useSavedJobs();
@@ -28,6 +30,7 @@ export default function JobsPage() {
   const [sourceFilter, setSourceFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
+  const { user } = useCurrentUser();
 
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
@@ -67,13 +70,18 @@ export default function JobsPage() {
     );
   });
 
-  const visibleJobs = [...filteredJobs].sort((a, b) => {
-    if (!sortByNewest) {
-      return b.matchScore - a.matchScore;
-    }
+  const scoredJobs = filteredJobs.map((job) => ({
+  ...job,
+  matchScore: user ? calculateMatchScore(job, user) : job.matchScore,
+}));
 
+  const visibleJobs = [...scoredJobs].sort((a, b) => {
+  if (sortByNewest) {
     return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
-  });
+  }
+
+  return b.matchScore - a.matchScore;
+});
 
   const availableSources = ["All", ...new Set(mockJobs.map((job) => job.source))];
 

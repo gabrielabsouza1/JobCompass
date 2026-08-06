@@ -18,7 +18,7 @@ import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { useApplications } from "@/hooks/use-applications";
 import { useJobSources } from "@/hooks/use-job-sources";
 import { useCurrentUser } from "@/hooks/use-current-user";
-
+import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 
 function StatCard({
   label,
@@ -75,6 +75,13 @@ export default function DashboardPage() {
       job.source.toLowerCase().includes(sourceId.toLowerCase())
     )
   );
+
+  const matchedJobs = visibleJobs
+  .map((job) => ({
+    ...job,
+    matchScore: user ? calculateMatchScore(job, user) : job.matchScore,
+  }))
+  .sort((a, b) => b.matchScore - a.matchScore);
 
   const interviewsUpcoming = applications.filter(
     (application) => application.status === "Interview"
@@ -208,7 +215,7 @@ export default function DashboardPage() {
 
         {visibleJobs.length > 0 ? (
           <div className="grid gap-4 lg:grid-cols-3">
-            {visibleJobs.slice(0, 3).map((job) => (
+            {matchedJobs.slice(0, 3).map((job) => (
               <TopJobCard key={job.id} job={job} />
             ))}
           </div>
