@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { getPostedAtValue } from "@/lib/job-utils";
 import { AppShell } from "@/components/layout/app-shell";
-import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,8 +19,8 @@ import { JobCard } from "@/components/jobs/job-card";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useJobSources } from "@/hooks/use-job-sources";
-import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { useJobs } from "@/hooks/use-jobs";
 
 export default function JobsPage() {
   const { savedJobIds, isJobSaved, toggleSavedJob } = useSavedJobs();
@@ -31,12 +30,13 @@ export default function JobsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
   const { user } = useCurrentUser();
+  const { jobs, isLoadingJobs, jobsError, refreshJobs } = useJobs();
 
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
   >("All");
 
-  const filteredJobs = mockJobs.filter((job) => {
+  const filteredJobs = jobs.filter((job) => {
     const matchesSelectedSources = selectedSourceIds.some((sourceId) => {
       const selectedSource = sourceId.toLowerCase();
 
@@ -70,20 +70,15 @@ export default function JobsPage() {
     );
   });
 
-  const scoredJobs = filteredJobs.map((job) => ({
-  ...job,
-  matchScore: user ? calculateMatchScore(job, user) : job.matchScore,
-}));
+  const visibleJobs = [...filteredJobs].sort((a, b) => {
+    if (sortByNewest) {
+      return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
+    }
 
-  const visibleJobs = [...scoredJobs].sort((a, b) => {
-  if (sortByNewest) {
-    return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
-  }
+    return b.matchScore - a.matchScore;
+  });
 
-  return b.matchScore - a.matchScore;
-});
-
-  const availableSources = ["All", ...new Set(mockJobs.map((job) => job.source))];
+  const availableSources = ["All", ...new Set(jobs.map((job) => job.source))];
 
   function handleToggleSavedJob(jobId: string) {
     const wasSaved = isJobSaved(jobId);
@@ -100,11 +95,13 @@ export default function JobsPage() {
     setSortByNewest(false);
   }
 
-  function handleRefreshJobs() {
+  async function handleRefreshJobs() {
     setSearchQuery("");
     setWorkModeFilter("All");
     setSourceFilter("All");
     setSortByNewest(false);
+
+    await refreshJobs();
 
     showToast("Jobs refreshed");
   }
@@ -223,27 +220,41 @@ export default function JobsPage() {
             </button>
           </div>
 
-          <div className="space-y-4">
-            {visibleJobs.length > 0 ? (
-              visibleJobs.map((job) => (
-                <JobCard
-                  key={job.id}
-                  job={job}
-                  isSaved={isJobSaved(job.id)}
-                  onToggleSave={() => handleToggleSavedJob(job.id)}
+          {isLoadingJobs ? (
+            <div className="rounded-4xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <p className="text-sm font-semibold text-slate-600">Loading jobs...</p>
+            </div>
+          ) : null}
+
+          {jobsError ? (
+            <div className="rounded-4xl border border-red-200 bg-red-50 p-8 text-center shadow-sm">
+              <p className="text-sm font-semibold text-red-700">{jobsError}</p>
+            </div>
+          ) : null}
+
+          {!isLoadingJobs && !jobsError ? (
+            <div className="space-y-4">
+              {visibleJobs.length > 0 ? (
+                visibleJobs.map((job) => (
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    isSaved={isJobSaved(job.id)}
+                    onToggleSave={() => handleToggleSavedJob(job.id)}
+                  />
+                ))
+              ) : (
+                <EmptyState
+                  title="No jobs found"
+                  description="Try changing your filters, search terms, or selected job sources."
+                  actionLabel="Clear filters"
+                  onAction={clearFilters}
+                  secondaryActionLabel="Manage sources"
+                  secondaryActionHref="/sources"
                 />
-              ))
-            ) : (
-              <EmptyState
-                title="No jobs found"
-                description="Try changing your filters, search terms, or selected job sources."
-                actionLabel="Clear filters"
-                onAction={clearFilters}
-                secondaryActionLabel="Manage sources"
-                secondaryActionHref="/sources"
-              />
-            )}
-          </div>
+              )}
+            </div>
+          ) : null}
         </section>
 
         <aside className="space-y-4">
@@ -290,7 +301,7 @@ export default function JobsPage() {
               </div>
 
               <div className="space-y-3">
-                {mockJobs.slice(0, 3).map((job) => (
+                {jobs.slice(0, 3).map((job) => (
                   <div
                     key={job.id}
                     className="flex items-center justify-between rounded-2xl bg-slate-50 p-3"
