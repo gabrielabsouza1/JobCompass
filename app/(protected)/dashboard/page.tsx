@@ -12,13 +12,11 @@ import Link from "next/link";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { mockJobs } from "@/data/mock-data";
 import { TopJobCard } from "@/components/dashboard/top-job-card";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { useApplications } from "@/hooks/use-applications";
-import { useJobSources } from "@/hooks/use-job-sources";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
+import { useJobs } from "@/hooks/use-jobs";
 
 function StatCard({
   label,
@@ -67,21 +65,14 @@ function StatCard({
 export default function DashboardPage() {
   const { savedJobIds } = useSavedJobs();
   const { applications } = useApplications();
-  const { selectedSourceIds } = useJobSources();
   const { user } = useCurrentUser();
+  const { jobs, isLoadingJobs, jobsError } = useJobs();
 
-  const visibleJobs = mockJobs.filter((job) =>
-    selectedSourceIds.some((sourceId) =>
-      job.source.toLowerCase().includes(sourceId.toLowerCase())
-    )
+  const visibleJobs = jobs;
+
+  const matchedJobs = [...visibleJobs].sort(
+    (a, b) => b.matchScore - a.matchScore
   );
-
-  const matchedJobs = visibleJobs
-  .map((job) => ({
-    ...job,
-    matchScore: user ? calculateMatchScore(job, user) : job.matchScore,
-  }))
-  .sort((a, b) => b.matchScore - a.matchScore);
 
   const interviewsUpcoming = applications.filter(
     (application) => application.status === "Interview"
@@ -137,7 +128,7 @@ export default function DashboardPage() {
           <div className="rounded-4xl bg-linear-to-br from-sky-50 to-teal-50 p-8 text-center">
             <div className="text-7xl">🧭</div>
             <p className="mt-4 text-sm font-medium text-slate-600">
-              Melbourne, VIC · Hybrid roles · 5 selected sources
+              Personalized matches · Updated from your selected sources
             </p>
           </div>
         </div>
@@ -213,20 +204,34 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {visibleJobs.length > 0 ? (
-          <div className="grid gap-4 lg:grid-cols-3">
-            {matchedJobs.slice(0, 3).map((job) => (
-              <TopJobCard key={job.id} job={job} />
-            ))}
+        {isLoadingJobs ? (
+          <div className="rounded-4xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <p className="text-sm font-semibold text-slate-600">Loading jobs...</p>
           </div>
-        ) : (
-          <EmptyState
-            title="No matched jobs yet"
-            description="Your selected sources do not have matching mock jobs right now. Try managing your job sources to see more opportunities."
-            actionLabel="Manage job sources"
-            actionHref="/sources"
-          />
-        )}
+        ) : null}
+
+        {jobsError ? (
+          <div className="rounded-4xl border border-red-200 bg-red-50 p-8 text-center shadow-sm">
+            <p className="text-sm font-semibold text-red-700">{jobsError}</p>
+          </div>
+        ) : null}
+
+        {!isLoadingJobs && !jobsError ? (
+          matchedJobs.length > 0 ? (
+            <div className="grid gap-4 lg:grid-cols-3">
+              {matchedJobs.slice(0, 3).map((job) => (
+                <TopJobCard key={job.id} job={job} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="No matched jobs yet"
+              description="Your selected sources do not have matching jobs right now. Try managing your job sources to see more opportunities."
+              actionLabel="Manage job sources"
+              actionHref="/sources"
+            />
+          )
+        ) : null}
       </section>
     </AppShell>
   );
