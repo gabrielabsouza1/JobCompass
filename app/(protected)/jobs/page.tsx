@@ -5,6 +5,14 @@ import { useEffect, useRef, useState } from "react";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { Filter } from "lucide-react";
 import { getPostedAtValue } from "@/lib/job-utils";
+import {
+  employmentTypesFromProfileValue,
+  serializeEmploymentTypeFilter,
+  serializeWorkModeFilter,
+  serializeWorkRightsFilter,
+  workModesFromProfileValue,
+  workRightsFromProfileValue,
+} from "@/lib/jobs/extract-filter-options";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,9 +39,11 @@ export default function JobsPage() {
   const [countryFilter, setCountryFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
-  const [workModeFilter, setWorkModeFilter] = useState("");
-  const [employmentTypeFilter, setEmploymentTypeFilter] = useState("");
-  const [workRightsFilter, setWorkRightsFilter] = useState("");
+  const [selectedWorkModes, setSelectedWorkModes] = useState<string[]>([]);
+  const [selectedEmploymentTypes, setSelectedEmploymentTypes] = useState<
+    string[]
+  >([]);
+  const [selectedWorkRights, setSelectedWorkRights] = useState<string[]>([]);
   const [filtersReady, setFiltersReady] = useState(false);
   const jobsTopRef = useRef<HTMLElement>(null);
   const pendingScrollToTopRef = useRef(false);
@@ -55,9 +65,9 @@ export default function JobsPage() {
     country: countryFilter,
     state: stateFilter,
     city: cityFilter,
-    workMode: workModeFilter,
-    employmentType: employmentTypeFilter,
-    workRights: workRightsFilter,
+    workMode: serializeWorkModeFilter(selectedWorkModes),
+    employmentType: serializeEmploymentTypeFilter(selectedEmploymentTypes),
+    workRights: serializeWorkRightsFilter(selectedWorkRights),
     source: sourceFilter !== "any" ? sourceFilter : undefined,
     enabled: filtersReady,
   });
@@ -78,9 +88,11 @@ export default function JobsPage() {
     setCountryFilter(user.countryName || "any");
     setStateFilter(user.stateName || "any");
     setCityFilter(user.cityName || "any");
-    setWorkModeFilter(user.workMode || "any");
-    setEmploymentTypeFilter(user.employmentType || "any");
-    setWorkRightsFilter("any");
+    setSelectedWorkModes(workModesFromProfileValue(user.workMode));
+    setSelectedEmploymentTypes(
+      employmentTypesFromProfileValue(user.employmentType)
+    );
+    setSelectedWorkRights(workRightsFromProfileValue(user.workRights));
     setFiltersReady(true);
   }, [user]);
 
@@ -97,9 +109,9 @@ export default function JobsPage() {
     countryFilter,
     stateFilter,
     cityFilter,
-    workModeFilter,
-    employmentTypeFilter,
-    workRightsFilter,
+    selectedWorkModes,
+    selectedEmploymentTypes,
+    selectedWorkRights,
     sourceFilter,
   ]);
 
@@ -174,15 +186,17 @@ export default function JobsPage() {
       city: user?.cityName || "any",
       workMode: user?.workMode || "any",
       employmentType: user?.employmentType || "any",
-      workRights: "any",
+      workRights: user?.workRights || "any",
     };
 
     setCountryFilter(defaults.country);
     setStateFilter(defaults.state);
     setCityFilter(defaults.city);
-    setWorkModeFilter(defaults.workMode);
-    setEmploymentTypeFilter(defaults.employmentType);
-    setWorkRightsFilter(defaults.workRights);
+    setSelectedWorkModes(workModesFromProfileValue(defaults.workMode));
+    setSelectedEmploymentTypes(
+      employmentTypesFromProfileValue(defaults.employmentType)
+    );
+    setSelectedWorkRights(workRightsFromProfileValue(defaults.workRights));
     setSourceFilter("any");
     setSortByNewest(false);
     setCurrentPage(1);
@@ -213,6 +227,36 @@ export default function JobsPage() {
   function handleStateChange(value: string) {
     setStateFilter(value);
     setCityFilter("any");
+  }
+
+  function handleToggleWorkMode(mode: string) {
+    setSelectedWorkModes((current) => {
+      if (current.includes(mode)) {
+        return current.filter((item) => item !== mode);
+      }
+
+      return [...current, mode];
+    });
+  }
+
+  function handleToggleEmploymentType(type: string) {
+    setSelectedEmploymentTypes((current) => {
+      if (current.includes(type)) {
+        return current.filter((item) => item !== type);
+      }
+
+      return [...current, type];
+    });
+  }
+
+  function handleToggleWorkRights(workRight: string) {
+    setSelectedWorkRights((current) => {
+      if (current.includes(workRight)) {
+        return current.filter((item) => item !== workRight);
+      }
+
+      return [...current, workRight];
+    });
   }
 
   const isPageLoading = isLoadingUser || !filtersReady || isLoadingJobs;
@@ -262,9 +306,9 @@ export default function JobsPage() {
         countryFilter={countryFilter}
         stateFilter={stateFilter}
         cityFilter={cityFilter}
-        workModeFilter={workModeFilter}
-        employmentTypeFilter={employmentTypeFilter}
-        workRightsFilter={workRightsFilter}
+        selectedWorkModes={selectedWorkModes}
+        selectedEmploymentTypes={selectedEmploymentTypes}
+        selectedWorkRights={selectedWorkRights}
         sourceFilter={sourceFilter}
         sortByNewest={sortByNewest}
         filterOptions={filterOptions}
@@ -272,11 +316,12 @@ export default function JobsPage() {
         onCountryChange={handleCountryChange}
         onStateChange={handleStateChange}
         onCityChange={setCityFilter}
-        onWorkModeChange={setWorkModeFilter}
-        onEmploymentTypeChange={setEmploymentTypeFilter}
-        onWorkRightsChange={setWorkRightsFilter}
+        onToggleWorkMode={handleToggleWorkMode}
+        onToggleEmploymentType={handleToggleEmploymentType}
+        onToggleWorkRights={handleToggleWorkRights}
         onSourceChange={setSourceFilter}
         onToggleNewest={() => setSortByNewest((current) => !current)}
+        onReset={resetFiltersToProfile}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">

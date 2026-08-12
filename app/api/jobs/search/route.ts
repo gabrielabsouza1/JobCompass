@@ -3,13 +3,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiUser } from "@/lib/auth/require-api-user";
 import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 import {
+  employmentTypesFromProfileValue,
+  isJobCompatibleWithWorkRight,
+  parseEmploymentTypeFilter,
+  parseWorkModeFilter,
+  parseWorkRightsFilter,
+  jobEmploymentTypeToFilterValue,
   buildAdzunaWhereFromFilters,
   buildProfileFilterDefaults,
   extractFilterOptionsFromJobs,
-  jobEmploymentTypeToFilterValue,
   mergeFilterOptions,
 } from "@/lib/jobs/extract-filter-options";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
+import {
+  getAdzunaCodeFromCountryName,
+  getAdzunaCountryByName,
+} from "@/lib/jobs/adzuna-countries";
 
 async function searchAdzunaJobs(
   countryCode: string,
@@ -32,7 +41,9 @@ async function searchAdzunaJobs(
 
   let what = searchTerm || undefined;
 
-  if (filters.workMode?.toLowerCase() === "remote" && !what) {
+  const workModes = parseWorkModeFilter(filters.workMode ?? "");
+
+  if (workModes.includes("remote") && !what) {
     what = "remote";
   }
 
@@ -43,6 +54,19 @@ async function searchAdzunaJobs(
     resultsPerPage: filters.perPage,
     page: filters.page,
   });
+}
+
+function resolveAdzunaCountryCode(
+  countryFilter: string | null,
+  profileCountryCode: string
+) {
+  if (countryFilter && countryFilter !== "any") {
+    const adzunaCountry = getAdzunaCountryByName(countryFilter);
+
+    return adzunaCountry?.code ?? getAdzunaCodeFromCountryName(countryFilter);
+  }
+
+  return profileCountryCode.toLowerCase();
 }
 
 export async function GET(request: NextRequest) {
@@ -104,11 +128,12 @@ export async function GET(request: NextRequest) {
   }
 
   const selectedSourceIds = userSources.map((source) => source.source_id);
-  const countryCode = profile.country_code || "AU";
+  const profileCountryCode = profile.country_code || "AU";
+  const adzunaCountryCode = resolveAdzunaCountryCode(country, profileCountryCode);
   const profileDefaults = buildProfileFilterDefaults(profile);
 
   const { jobs: adzunaJobs, total: adzunaTotal } = await searchAdzunaJobs(
-    countryCode,
+    adzunaCountryCode,
     {
       query,
       country,
@@ -120,7 +145,7 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { jobs: sampleJobs } = await searchAdzunaJobs(countryCode, {
+  const { jobs: sampleJobs } = await searchAdzunaJobs(adzunaCountryCode, {
     query,
     country: null,
     state: null,
@@ -161,21 +186,27 @@ export async function GET(request: NextRequest) {
       : sourceFilteredJobs;
 
   const visibleJobs = sourceScopedJobs.filter((job) => {
+    const workModeFilters = parseWorkModeFilter(workMode ?? "");
+
     const matchesWorkMode =
-      !workMode ||
-      workMode === "any" ||
-      job.workMode.toLowerCase() === workMode.toLowerCase();
+      workModeFilters.length === 0 ||
+      workModeFilters.includes(job.workMode.toLowerCase());
+
+    const employmentFilters = parseEmploymentTypeFilter(employmentType ?? "");
 
     const matchesEmploymentType =
-      !employmentType ||
-      employmentType === "any" ||
-      jobEmploymentTypeToFilterValue(job.employmentType) ===
-        employmentType.toLowerCase();
+      employmentFilters.length === 0 ||
+      employmentFilters.includes(
+        jobEmploymentTypeToFilterValue(job.employmentType)
+      );
+
+    const workRightsFilters = parseWorkRightsFilter(workRights ?? "");
 
     const matchesWorkRights =
-      !workRights ||
-      workRights === "any" ||
-      job.workRightsRisk.toLowerCase() === workRights.toLowerCase();
+      workRightsFilters.length === 0 ||
+      workRightsFilters.some((workRight) =>
+        isJobCompatibleWithWorkRight(job, workRight)
+      );
 
     return matchesWorkMode && matchesEmploymentType && matchesWorkRights;
   });
