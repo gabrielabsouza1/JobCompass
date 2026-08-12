@@ -7,6 +7,7 @@ type RawJobInput = {
   source: string;
   sourceType: "api" | "smart_link";
   location: string;
+  country?: string;
   state?: string;
   city?: string;
   workMode?: string;
@@ -20,6 +21,7 @@ type RawJobInput = {
   description: string;
   url: string;
   workRightsRisk?: "Low" | "Medium" | "High";
+  companyLogoUrl?: string;
 };
 
 function normalizeWorkMode(workMode?: string): WorkMode {
@@ -39,6 +41,7 @@ export function normalizeJob(rawJob: RawJobInput): Job {
     source: rawJob.source,
     sourceType: rawJob.sourceType,
     location: rawJob.location,
+    country: rawJob.country ?? "",
     state: rawJob.state ?? "",
     city: rawJob.city ?? "",
     workMode: normalizeWorkMode(rawJob.workMode),
@@ -52,5 +55,6 @@ export function normalizeJob(rawJob: RawJobInput): Job {
     description: rawJob.description,
     url: rawJob.url,
     workRightsRisk: rawJob.workRightsRisk ?? "Low",
+    companyLogoUrl: rawJob.companyLogoUrl,
   };
 }

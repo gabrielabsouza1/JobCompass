@@ -1,74 +1,68 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
-import {
-  Filter,
-  Search,
-  SlidersHorizontal,
-} from "lucide-react";
+import { Filter } from "lucide-react";
 import { getPostedAtValue } from "@/lib/job-utils";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JobCard } from "@/components/jobs/job-card";
+import { JobsFiltersPanel } from "@/components/jobs/jobs-filters-panel";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
-import { useJobSources } from "@/hooks/use-job-sources";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobs } from "@/hooks/use-jobs";
+
+const JOBS_PER_PAGE = 10;
 
 export default function JobsPage() {
   const { savedJobIds, isJobSaved, toggleSavedJob } = useSavedJobs();
   const { toastMessage, showToast } = useToast();
-  const { selectedSourceIds } = useJobSources();
-  const [sourceFilter, setSourceFilter] = useState("All");
+  const { user, isLoadingUser } = useCurrentUser();
+  const [sourceFilter, setSourceFilter] = useState("any");
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
-  const { jobs, isLoadingJobs, jobsError, fallbackMessage, refreshJobs } = useJobs();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [countryFilter, setCountryFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [cityFilter, setCityFilter] = useState("");
+  const [workModeFilter, setWorkModeFilter] = useState("");
+  const [employmentTypeFilter, setEmploymentTypeFilter] = useState("");
+  const [workRightsFilter, setWorkRightsFilter] = useState("");
+  const [filtersReady, setFiltersReady] = useState(false);
+  const jobsTopRef = useRef<HTMLElement>(null);
+  const pendingScrollToTopRef = useRef(false);
 
-  const [workModeFilter, setWorkModeFilter] = useState<
-    "All" | "Remote" | "Hybrid" | "Onsite"
-  >("All");
-
-  const filteredJobs = jobs.filter((job) => {
-    const matchesSelectedSources = selectedSourceIds.some((sourceId) => {
-      const selectedSource = sourceId.toLowerCase();
-
-      return job.source.toLowerCase().includes(selectedSource);
-    });
-
-    const matchesWorkMode =
-      workModeFilter === "All" || job.workMode === workModeFilter;
-
-    const matchesSource =
-      sourceFilter === "All" || job.source === sourceFilter;
-
-    const searchText = [
-      job.title,
-      job.company,
-      job.location,
-      job.source,
-      job.employmentType,
-      ...job.skills,
-    ]
-      .join(" ")
-      .toLowerCase();
-
-    const matchesSearch = searchText.includes(searchQuery.toLowerCase());
-
-    return (
-      matchesSelectedSources &&
-      matchesWorkMode &&
-      matchesSource &&
-      matchesSearch
-    );
+  const {
+    jobs,
+    total,
+    totalPages,
+    filterOptions,
+    profileDefaults,
+    isLoadingJobs,
+    jobsError,
+    fallbackMessage,
+    refreshJobs,
+  } = useJobs({
+    page: currentPage,
+    perPage: JOBS_PER_PAGE,
+    query: searchQuery,
+    country: countryFilter,
+    state: stateFilter,
+    city: cityFilter,
+    workMode: workModeFilter,
+    employmentType: employmentTypeFilter,
+    workRights: workRightsFilter,
+    source: sourceFilter !== "any" ? sourceFilter : undefined,
+    enabled: filtersReady,
   });
 
-  const visibleJobs = [...filteredJobs].sort((a, b) => {
+  const visibleJobs = [...jobs].sort((a, b) => {
     if (sortByNewest) {
       return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
     }
@@ -76,7 +70,94 @@ export default function JobsPage() {
     return b.matchScore - a.matchScore;
   });
 
-  const availableSources = ["All", ...new Set(jobs.map((job) => job.source))];
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setCountryFilter(user.countryName || "any");
+    setStateFilter(user.stateName || "any");
+    setCityFilter(user.cityName || "any");
+    setWorkModeFilter(user.workMode || "any");
+    setEmploymentTypeFilter(user.employmentType || "any");
+    setWorkRightsFilter("any");
+    setFiltersReady(true);
+  }, [user]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchQuery(searchInput), 400);
+
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    countryFilter,
+    stateFilter,
+    cityFilter,
+    workModeFilter,
+    employmentTypeFilter,
+    workRightsFilter,
+    sourceFilter,
+  ]);
+
+  useEffect(() => {
+    if (!pendingScrollToTopRef.current || isLoadingJobs) {
+      return;
+    }
+
+    pendingScrollToTopRef.current = false;
+
+    window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+    jobsTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [currentPage, isLoadingJobs]);
+
+  function handlePageChange(page: number) {
+    if (page === currentPage) {
+      return;
+    }
+
+    pendingScrollToTopRef.current = true;
+    setCurrentPage(page);
+  }
+
+  function renderPagination() {
+    if (totalPages <= 1) {
+      return null;
+    }
+
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={currentPage === 1 || isLoadingJobs}
+          onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+          className="h-9 rounded-xl border-slate-200"
+        >
+          Previous
+        </Button>
+
+        <p className="text-sm font-semibold text-slate-600">
+          Page {currentPage} of {totalPages}
+        </p>
+
+        <Button
+          type="button"
+          variant="outline"
+          disabled={currentPage === totalPages || isLoadingJobs}
+          onClick={() =>
+            handlePageChange(Math.min(totalPages, currentPage + 1))
+          }
+          className="h-9 rounded-xl border-slate-200"
+        >
+          Next
+        </Button>
+      </div>
+    );
+  }
 
   function handleToggleSavedJob(jobId: string) {
     const wasSaved = isJobSaved(jobId);
@@ -86,47 +167,80 @@ export default function JobsPage() {
     showToast(wasSaved ? "Job removed from saved" : "Job saved");
   }
 
-  function clearFilters() {
-    setSearchQuery("");
-    setWorkModeFilter("All");
-    setSourceFilter("All");
+  function resetFiltersToProfile() {
+    const defaults = profileDefaults ?? {
+      country: user?.countryName || "any",
+      state: user?.stateName || "any",
+      city: user?.cityName || "any",
+      workMode: user?.workMode || "any",
+      employmentType: user?.employmentType || "any",
+      workRights: "any",
+    };
+
+    setCountryFilter(defaults.country);
+    setStateFilter(defaults.state);
+    setCityFilter(defaults.city);
+    setWorkModeFilter(defaults.workMode);
+    setEmploymentTypeFilter(defaults.employmentType);
+    setWorkRightsFilter(defaults.workRights);
+    setSourceFilter("any");
     setSortByNewest(false);
+    setCurrentPage(1);
+  }
+
+  function clearFilters() {
+    setSearchInput("");
+    setSearchQuery("");
+    resetFiltersToProfile();
   }
 
   async function handleRefreshJobs() {
+    setSearchInput("");
     setSearchQuery("");
-    setWorkModeFilter("All");
-    setSourceFilter("All");
-    setSortByNewest(false);
+    resetFiltersToProfile();
 
     await refreshJobs();
 
     showToast("Jobs refreshed");
   }
 
+  function handleCountryChange(value: string) {
+    setCountryFilter(value);
+    setStateFilter("any");
+    setCityFilter("any");
+  }
+
+  function handleStateChange(value: string) {
+    setStateFilter(value);
+    setCityFilter("any");
+  }
+
+  const isPageLoading = isLoadingUser || !filtersReady || isLoadingJobs;
+
   return (
     <AppShell>
-      <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="mb-2 inline-flex rounded-full bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700">
+          <p className="mb-2 inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-medium text-teal-700">
             Jobs from your selected sources
           </p>
 
-          <h1 className="text-4xl font-bold tracking-tight text-slate-950">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">
             Jobs
           </h1>
 
-          <p className="mt-2 text-slate-600">
-            Browse jobs matched to your profile, location and work preferences.
+          <p className="mt-1 text-sm text-slate-600">
+            Filters start from your profile — change them here for this search
+            only.
           </p>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Link
             href="/saved"
-            className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 text-sm font-semibold text-slate-700 transition hover:bg-teal-50 hover:text-teal-700"
+            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:bg-teal-50 hover:text-teal-700"
           >
-            View saved jobs
+            Saved jobs
             <span className="ml-2 rounded-full bg-teal-50 px-2 py-0.5 text-xs font-bold text-teal-700">
               {savedJobIds.length}
             </span>
@@ -135,81 +249,41 @@ export default function JobsPage() {
           <Button
             type="button"
             onClick={handleRefreshJobs}
-            className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+            className="h-10 rounded-xl bg-teal-600 px-5 hover:bg-teal-700"
           >
             Refresh jobs
           </Button>
         </div>
       </div>
 
-      <section className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
-            <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search jobs, companies, or keywords"
-              className="h-12 rounded-2xl border-slate-200 pl-12"
-            />
-          </div>
+      <JobsFiltersPanel
+        searchInput={searchInput}
+        onSearchInputChange={setSearchInput}
+        countryFilter={countryFilter}
+        stateFilter={stateFilter}
+        cityFilter={cityFilter}
+        workModeFilter={workModeFilter}
+        employmentTypeFilter={employmentTypeFilter}
+        workRightsFilter={workRightsFilter}
+        sourceFilter={sourceFilter}
+        sortByNewest={sortByNewest}
+        filterOptions={filterOptions}
+        disabled={!filtersReady}
+        onCountryChange={handleCountryChange}
+        onStateChange={handleStateChange}
+        onCityChange={setCityFilter}
+        onWorkModeChange={setWorkModeFilter}
+        onEmploymentTypeChange={setEmploymentTypeFilter}
+        onWorkRightsChange={setWorkRightsFilter}
+        onSourceChange={setSourceFilter}
+        onToggleNewest={() => setSortByNewest((current) => !current)}
+      />
 
-          <Button
-            variant="outline"
-            className="h-12 rounded-2xl border-slate-200"
-          >
-            <SlidersHorizontal className="mr-2 h-5 w-5" />
-            Filters
-          </Button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-3">
-          {["All", "Remote", "Hybrid", "Onsite"].map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() =>
-                setWorkModeFilter(mode as "All" | "Remote" | "Hybrid" | "Onsite")
-              }
-              className={`rounded-full px-5 py-2 text-sm font-semibold transition ${workModeFilter === mode
-                ? "bg-teal-600 text-white"
-                : "border border-slate-200 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-700"
-                }`}
-            >
-              {mode === "All" ? "All Jobs" : mode}
-            </button>
-          ))}
-
-          <select
-            value={sourceFilter}
-            onChange={(event) => setSourceFilter(event.target.value)}
-            className="rounded-full border border-slate-200 bg-white px-5 py-2 text-sm font-semibold text-slate-700 outline-none transition hover:bg-teal-50 hover:text-teal-700"
-          >
-            {availableSources.map((source) => (
-              <option key={source} value={source}>
-                {source === "All" ? "All sources" : source}
-              </option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            onClick={() => setSortByNewest((current) => !current)}
-            className={`rounded-full px-5 py-2 text-sm font-semibold transition ${sortByNewest
-              ? "bg-teal-600 text-white"
-              : "border border-slate-200 bg-white text-slate-700 hover:bg-teal-50 hover:text-teal-700"
-              }`}
-          >
-            Newest
-          </button>
-        </div>
-      </section>
-
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
-        <section>
-          <div className="mb-4 flex items-center justify-between">
+      <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
+        <section ref={jobsTopRef}>
+          <div className="mb-3 flex items-center justify-between">
             <p className="text-sm font-medium text-slate-600">
-              {visibleJobs.length} jobs found
+              {total} jobs found
             </p>
 
             <button className="flex items-center gap-2 text-sm font-semibold text-teal-700">
@@ -218,40 +292,48 @@ export default function JobsPage() {
             </button>
           </div>
 
-          {isLoadingJobs ? (
-            <div className="rounded-4xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-              <p className="text-sm font-semibold text-slate-600">Loading jobs...</p>
+          {isPageLoading ? (
+            <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+              <p className="text-sm font-semibold text-slate-600">
+                Loading jobs...
+              </p>
             </div>
           ) : null}
 
           {fallbackMessage ? (
-            <div className="mb-4 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-medium text-amber-800">
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
               {fallbackMessage}
             </div>
           ) : null}
 
           {jobsError ? (
-            <div className="rounded-4xl border border-red-200 bg-red-50 p-8 text-center shadow-sm">
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-center shadow-sm">
               <p className="text-sm font-semibold text-red-700">{jobsError}</p>
             </div>
           ) : null}
 
-          {!isLoadingJobs && !jobsError ? (
-            <div className="space-y-4">
+          {!isPageLoading && !jobsError ? (
+            <div className="space-y-3">
               {visibleJobs.length > 0 ? (
-                visibleJobs.map((job) => (
-                  <JobCard
-                    key={job.id}
-                    job={job}
-                    isSaved={isJobSaved(job.id)}
-                    onToggleSave={() => handleToggleSavedJob(job.id)}
-                  />
-                ))
+                <>
+                  {renderPagination()}
+
+                  {visibleJobs.map((job) => (
+                    <JobCard
+                      key={job.id}
+                      job={job}
+                      isSaved={isJobSaved(job.id)}
+                      onToggleSave={() => handleToggleSavedJob(job.id)}
+                    />
+                  ))}
+
+                  {renderPagination()}
+                </>
               ) : (
                 <EmptyState
                   title="No jobs found"
                   description="Try changing your filters, search terms, or selected job sources."
-                  actionLabel="Clear filters"
+                  actionLabel="Reset filters"
                   onAction={clearFilters}
                   secondaryActionLabel="Manage sources"
                   secondaryActionHref="/sources"
@@ -262,8 +344,8 @@ export default function JobsPage() {
         </section>
 
         <aside className="space-y-4">
-          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-            <CardContent className="p-5">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
+            <CardContent className="p-4">
               <h2 className="font-bold text-slate-950">About match score</h2>
 
               <p className="mt-2 text-sm text-slate-600">
@@ -271,7 +353,7 @@ export default function JobsPage() {
                 location and work preferences.
               </p>
 
-              <div className="mt-5 space-y-3 text-sm">
+              <div className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Skills & experience</span>
                   <span className="font-semibold text-slate-950">45%</span>
@@ -295,20 +377,20 @@ export default function JobsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-            <CardContent className="p-5">
-              <div className="mb-4 flex items-center justify-between">
+          <Card className="rounded-2xl border-slate-200 bg-white shadow-sm">
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center justify-between">
                 <h2 className="font-bold text-slate-950">Saved jobs</h2>
                 <Link href="/tracker" className="text-sm font-semibold text-teal-700">
                   View all →
                 </Link>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {jobs.slice(0, 3).map((job) => (
                   <div
                     key={job.id}
-                    className="flex items-center justify-between rounded-2xl bg-slate-50 p-3"
+                    className="flex items-center justify-between rounded-xl bg-slate-50 p-3"
                   >
                     <div>
                       <p className="text-sm font-semibold text-slate-950">
@@ -326,8 +408,8 @@ export default function JobsPage() {
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl border-teal-100 bg-teal-50 shadow-sm">
-            <CardContent className="p-5">
+          <Card className="rounded-2xl border-teal-100 bg-teal-50 shadow-sm">
+            <CardContent className="p-4">
               <h2 className="font-bold text-slate-950">Get better matches</h2>
 
               <p className="mt-2 text-sm text-slate-600">
@@ -335,7 +417,7 @@ export default function JobsPage() {
                 accurate job recommendations.
               </p>
 
-              <Button className="mt-5 h-11 rounded-2xl bg-teal-600 hover:bg-teal-700">
+              <Button className="mt-4 h-10 rounded-xl bg-teal-600 hover:bg-teal-700">
                 Complete profile
               </Button>
             </CardContent>
