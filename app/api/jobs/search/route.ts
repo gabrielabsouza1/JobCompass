@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-import { mockJobs } from "@/data/mock-data";
+import { getMockJobs } from "@/lib/jobs/providers/mock-provider";
 import { requireApiUser } from "@/lib/auth/require-api-user";
 import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 
@@ -48,7 +47,9 @@ export async function GET() {
 
   const selectedSourceIds = userSources.map((source) => source.source_id);
 
-  const visibleJobs = mockJobs.filter((job) =>
+  const jobs = await getMockJobs();
+  
+  const visibleJobs = jobs.filter((job) =>
     selectedSourceIds.some((sourceId) =>
       job.source.toLowerCase().includes(sourceId.toLowerCase())
     )
