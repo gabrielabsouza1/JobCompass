@@ -17,6 +17,7 @@ export type Job = {
   source: string;
   sourceType: JobSourceType;
   location: string;
+  country: string;
   state: string;
   city: string;
   workMode: WorkMode;
@@ -30,4 +31,5 @@ export type Job = {
   description: string;
   url: string;
   workRightsRisk: "Low" | "Medium" | "High";
+  companyLogoUrl?: string;
 };

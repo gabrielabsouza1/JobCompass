@@ -13,6 +13,7 @@ import {
 import type { Job } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { JobListingAvatar } from "@/components/jobs/job-listing-avatar";
 
 type JobCardProps = {
   job: Job;
@@ -34,9 +35,7 @@ export function JobCard({ job, isSaved, onToggleSave }: JobCardProps) {
       <CardContent className="relative z-20 p-5">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex gap-4">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-bold text-slate-700">
-              {job.source.slice(0, 1)}
-            </div>
+            <JobListingAvatar job={job} />
 
             <div>
               <div className="mb-1 flex flex-wrap items-center gap-2">

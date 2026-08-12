@@ -1,6 +1,7 @@
 import type { Job } from "@/types";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { JobListingAvatar } from "@/components/jobs/job-listing-avatar";
 
 type TopJobCardProps = {
   job: Job;
@@ -11,9 +12,10 @@ export function TopJobCard({ job }: TopJobCardProps) {
     <Card className="rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md">
       <CardContent className="p-5">
         <div className="mb-4 flex items-center justify-between">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 font-bold text-slate-700">
-            {job.source.slice(0, 1)}
-          </div>
+          <JobListingAvatar
+            job={job}
+            imageClassName="h-12 w-12 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5"
+          />
 
           <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
             {job.matchScore}% match

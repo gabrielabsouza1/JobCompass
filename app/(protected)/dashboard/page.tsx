@@ -66,7 +66,7 @@ export default function DashboardPage() {
   const { savedJobIds } = useSavedJobs();
   const { applications } = useApplications();
   const { user } = useCurrentUser();
-  const { jobs, isLoadingJobs, jobsError } = useJobs();
+  const { jobs, total, isLoadingJobs, jobsError } = useJobs({ perPage: 10 });
 
   const visibleJobs = jobs;
 
@@ -137,7 +137,7 @@ export default function DashboardPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="New jobs found"
-          value={visibleJobs.length}
+          value={total}
           icon={BriefcaseBusiness}
           helper="From selected sources"
           href="/jobs"

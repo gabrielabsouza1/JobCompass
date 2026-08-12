@@ -10,7 +10,7 @@ export async function GET() {
     return response;
   }
 
-  const jobs = await getAdzunaJobs({
+  const { jobs, total } = await getAdzunaJobs({
     countryCode: "AU",
     what: "qa tester",
     where: "Melbourne",
@@ -19,6 +19,6 @@ export async function GET() {
 
   return NextResponse.json({
     jobs,
-    total: jobs.length,
+    total,
   });
 }
