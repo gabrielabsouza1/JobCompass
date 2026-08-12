@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getMockJobs } from "@/lib/jobs/providers/mock-provider";
 import { requireApiUser } from "@/lib/auth/require-api-user";
 import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
+import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
 
 export async function GET() {
   const { user, response } = await requireApiUser();
@@ -17,7 +18,7 @@ export async function GET() {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "country_name, state_name, city_name, work_mode, employment_type, work_rights"
+      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
     )
     .eq("id", user.id)
     .single();
@@ -47,8 +48,17 @@ export async function GET() {
 
   const selectedSourceIds = userSources.map((source) => source.source_id);
 
-  const jobs = await getMockJobs();
-  
+  const mockJobs = await getMockJobs();
+
+  const adzunaJobs = await getAdzunaJobs({
+    countryCode: profile.country_code ?? "AU",
+    what: "qa tester",
+    where: profile.city_name ?? "",
+    resultsPerPage: 10,
+  });
+
+  const jobs = [...adzunaJobs, ...mockJobs];
+
   const visibleJobs = jobs.filter((job) =>
     selectedSourceIds.some((sourceId) =>
       job.source.toLowerCase().includes(sourceId.toLowerCase())
