@@ -38,6 +38,7 @@ type AdzunaSearchResponse = {
 export type GetAdzunaJobsParams = {
   countryCode?: string;
   what?: string;
+  whatOr?: string;
   where?: string;
   resultsPerPage?: number;
   page?: number;
@@ -149,11 +150,13 @@ async function fetchAdzunaPage(
   appKey: string,
   {
     what,
+    whatOr,
     where,
     resultsPerPage,
     page,
   }: {
     what: string;
+    whatOr?: string;
     where?: string;
     resultsPerPage: number;
     page: number;
@@ -170,6 +173,10 @@ async function fetchAdzunaPage(
 
   if (what) {
     url.searchParams.set("what", what);
+  }
+
+  if (whatOr) {
+    url.searchParams.set("what_or", whatOr);
   }
 
   if (where) {
@@ -193,6 +200,7 @@ async function fetchAdzunaPage(
 export async function getAdzunaJobs({
   countryCode = "AU",
   what,
+  whatOr,
   where,
   resultsPerPage = 10,
   page = 1,
@@ -209,6 +217,7 @@ export async function getAdzunaJobs({
 
   const data = await fetchAdzunaPage(adzunaCountryCode, appId, appKey, {
     what: what ?? "",
+    whatOr,
     where,
     resultsPerPage,
     page,

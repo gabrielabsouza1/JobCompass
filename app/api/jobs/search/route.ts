@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
+import { buildAdzunaWhatFromQueryAndRoles } from "@/lib/jobs/build-adzuna-search-query";
 import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 import {
   employmentTypesFromProfileValue,
@@ -26,6 +27,7 @@ async function searchAdzunaJobs(
   countryCode: string,
   filters: {
     query: string;
+    targetRoles: string[];
     country: string | null;
     state: string | null;
     city: string | null;
@@ -34,24 +36,27 @@ async function searchAdzunaJobs(
     perPage: number;
   }
 ) {
-  const searchTerm = filters.query.trim();
+  const { what, whatOr } = buildAdzunaWhatFromQueryAndRoles(
+    filters.query,
+    filters.targetRoles
+  );
   const where = buildAdzunaWhereFromFilters(
     filters.country,
     filters.state,
     filters.city
   );
 
-  let what = searchTerm || undefined;
-
+  let resolvedWhat = what;
   const workModes = parseWorkModeFilter(filters.workMode ?? "");
 
-  if (workModes.includes("remote") && !what) {
-    what = "remote";
+  if (workModes.includes("remote") && !resolvedWhat && !whatOr) {
+    resolvedWhat = "remote";
   }
 
   return getAdzunaJobs({
     countryCode,
-    what,
+    what: resolvedWhat,
+    whatOr,
     where,
     resultsPerPage: filters.perPage,
     page: filters.page,
@@ -187,6 +192,7 @@ export async function GET(request: NextRequest) {
     adzunaCountryCode,
     {
       query,
+      targetRoles: activeTargetRoles,
       country,
       state,
       city,
@@ -198,6 +204,7 @@ export async function GET(request: NextRequest) {
 
   const { jobs: sampleJobs } = await searchAdzunaJobs(adzunaCountryCode, {
     query,
+    targetRoles: [],
     country: null,
     state: null,
     city: null,
