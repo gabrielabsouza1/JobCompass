@@ -7,12 +7,14 @@ import type { Job } from "@/types";
 type JobsResponse = {
   jobs: Job[];
   total: number;
+  fallbackMessage?: string;
 };
 
 export function useJobs() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
   const [jobsError, setJobsError] = useState("");
+  const [fallbackMessage, setFallbackMessage] = useState("");
 
   async function loadJobs(options?: { showLoading?: boolean }) {
     const showLoading = options?.showLoading ?? true;
@@ -33,6 +35,7 @@ export function useJobs() {
 
       setJobs(data.jobs);
       setJobsError("");
+      setFallbackMessage(data.fallbackMessage ?? "");
     } catch (error) {
       console.error(error);
       setJobs([]);
@@ -61,6 +64,7 @@ export function useJobs() {
 
         setJobs(data.jobs);
         setJobsError("");
+        setFallbackMessage(data.fallbackMessage ?? "");
       } catch (error) {
         console.error(error);
 
@@ -89,5 +93,6 @@ export function useJobs() {
     isLoadingJobs,
     jobsError,
     refreshJobs: loadJobs,
+    fallbackMessage,
   };
 }

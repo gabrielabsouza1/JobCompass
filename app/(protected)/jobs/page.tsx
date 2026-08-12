@@ -19,7 +19,6 @@ import { JobCard } from "@/components/jobs/job-card";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useJobSources } from "@/hooks/use-job-sources";
-import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobs } from "@/hooks/use-jobs";
 
 export default function JobsPage() {
@@ -29,8 +28,7 @@ export default function JobsPage() {
   const [sourceFilter, setSourceFilter] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortByNewest, setSortByNewest] = useState(false);
-  const { user } = useCurrentUser();
-  const { jobs, isLoadingJobs, jobsError, refreshJobs } = useJobs();
+  const { jobs, isLoadingJobs, jobsError, fallbackMessage, refreshJobs } = useJobs();
 
   const [workModeFilter, setWorkModeFilter] = useState<
     "All" | "Remote" | "Hybrid" | "Onsite"
@@ -223,6 +221,12 @@ export default function JobsPage() {
           {isLoadingJobs ? (
             <div className="rounded-4xl border border-slate-200 bg-white p-8 text-center shadow-sm">
               <p className="text-sm font-semibold text-slate-600">Loading jobs...</p>
+            </div>
+          ) : null}
+
+          {fallbackMessage ? (
+            <div className="mb-4 rounded-3xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-medium text-amber-800">
+              {fallbackMessage}
             </div>
           ) : null}
 
