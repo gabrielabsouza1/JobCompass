@@ -33,16 +33,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import {
+  normalizeTargetRole,
+  parseTargetRolesFromProfile,
+  targetRolesFromProfileValue,
+  uniqueTargetRoles,
+} from "@/lib/profile/target-roles";
 import { createClient } from "@/lib/supabase/client";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
-
-const targetRoles = [
-  "QA Tester",
-  "Manual Tester",
-  "Junior Software Tester",
-  "IT Support Officer",
-];
 
 const skills = [
   "Manual Testing",
@@ -70,10 +69,16 @@ export default function ProfilePage() {
   const [workMode, setWorkMode] = useState("");
   const [employmentType, setEmploymentType] = useState("");
   const [workRights, setWorkRights] = useState("");
+  const [isEditRolesModalOpen, setIsEditRolesModalOpen] = useState(false);
+  const [targetRoles, setTargetRoles] = useState<string[]>([]);
+  const [newTargetRoleInput, setNewTargetRoleInput] = useState("");
+  const [isSavingRoles, setIsSavingRoles] = useState(false);
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [states, setStates] = useState<StateOption[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
+  const displayedTargetRoles = user?.targetRoles ?? [];
 
   const preferences = [
     {
@@ -198,6 +203,62 @@ export default function ProfilePage() {
     }
   }
 
+  async function openEditTargetRolesModal() {
+    setTargetRoles(displayedTargetRoles);
+    setNewTargetRoleInput("");
+    setIsEditRolesModalOpen(true);
+  }
+
+  function handleAddProfileTargetRole() {
+    const normalized = normalizeTargetRole(newTargetRoleInput);
+
+    if (!normalized) {
+      return;
+    }
+
+    setTargetRoles((current) => uniqueTargetRoles([...current, normalized]));
+    setNewTargetRoleInput("");
+  }
+
+  function handleRemoveProfileTargetRole(role: string) {
+    setTargetRoles((current) => current.filter((item) => item !== role));
+  }
+
+  async function handleSaveTargetRoles() {
+    if (!user) {
+      return;
+    }
+
+    setIsSavingRoles(true);
+
+    const supabase = createClient();
+    const { data: updatedProfile, error } = await supabase
+      .from("profiles")
+      .update({ target_roles: targetRoles })
+      .eq("id", user.id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      setErrorMessage(error.message);
+      setIsSavingRoles(false);
+      return;
+    }
+
+    if (!updatedProfile) {
+      setErrorMessage(
+        "Could not save target roles. Check Supabase RLS policies for the profiles table."
+      );
+      setIsSavingRoles(false);
+      return;
+    }
+
+    setIsSavingRoles(false);
+    setIsEditRolesModalOpen(false);
+    showToast("Target roles updated");
+    window.location.reload();
+  }
+
   async function handleUpdateProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -210,7 +271,7 @@ export default function ProfilePage() {
 
     const supabase = createClient();
 
-    const { error } = await supabase
+    const { data: updatedProfile, error } = await supabase
       .from("profiles")
       .update({
         full_name: fullName.trim(),
@@ -223,10 +284,20 @@ export default function ProfilePage() {
         employment_type: employmentType,
         work_rights: workRights,
       })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select("id")
+      .maybeSingle();
 
     if (error) {
       setErrorMessage(error.message);
+      setIsSaving(false);
+      return;
+    }
+
+    if (!updatedProfile) {
+      setErrorMessage(
+        "Could not save profile. Check Supabase RLS policies for the profiles table."
+      );
       setIsSaving(false);
       return;
     }
@@ -351,20 +422,27 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   className="rounded-2xl border-slate-200"
+                  onClick={openEditTargetRolesModal}
                 >
                   Edit
                 </Button>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {targetRoles.map((role) => (
-                  <Badge
-                    key={role}
-                    className="rounded-full bg-teal-50 px-4 py-2 text-teal-700 hover:bg-teal-50"
-                  >
-                    {role}
-                  </Badge>
-                ))}
+                {displayedTargetRoles.length > 0 ? (
+                  displayedTargetRoles.map((role) => (
+                    <Badge
+                      key={role}
+                      className="rounded-full bg-teal-50 px-4 py-2 text-teal-700 hover:bg-teal-50"
+                    >
+                      {role}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No target roles yet. Add roles to improve job matching.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -768,6 +846,76 @@ export default function ProfilePage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isEditRolesModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-xl">
+            <div className="border-b border-slate-100 px-6 py-5">
+              <h2 className="text-xl font-bold text-slate-950">Edit target roles</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                These roles feed your jobs filters and keyword ranking.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="flex flex-wrap gap-2">
+                {targetRoles.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => handleRemoveProfileTargetRole(role)}
+                    className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-700 transition hover:bg-teal-100"
+                  >
+                    {role}
+                    <span className="text-teal-500">×</span>
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Add role
+                </label>
+                <input
+                  value={newTargetRoleInput}
+                  onChange={(event) => setNewTargetRoleInput(event.target.value)}
+                  placeholder="e.g. Junior front end developer"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddProfileTargetRole}
+                className="h-10 rounded-2xl border-slate-200"
+              >
+                Add to list
+              </Button>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-5 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditRolesModalOpen(false)}
+                className="h-11 rounded-2xl border-slate-200 px-6"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSaveTargetRoles}
+                disabled={isSavingRoles || targetRoles.length === 0}
+                className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingRoles ? "Saving..." : "Save roles"}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

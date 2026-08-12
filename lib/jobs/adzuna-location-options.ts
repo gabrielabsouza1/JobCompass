@@ -9,6 +9,7 @@ import {
 } from "@/lib/jobs/extract-filter-options";
 import {
   getAdzunaCountriesWithJobs,
+  getAdzunaJobCount,
   getAdzunaJobSamples,
 } from "@/lib/jobs/providers/adzuna-provider";
 
@@ -24,6 +25,21 @@ function mergeLocationOption(value: string, options: string[]) {
   }
 
   return [value, ...options];
+}
+
+async function filterLocationsWithJobs(
+  adzunaCode: string,
+  locations: string[]
+) {
+  const results = await Promise.all(
+    locations.map(async (location) => {
+      const count = await getAdzunaJobCount(adzunaCode, location);
+
+      return count > 0 ? location : null;
+    })
+  );
+
+  return results.filter((location): location is string => Boolean(location));
 }
 
 export async function getAdzunaLocationFilterOptions({
@@ -56,16 +72,24 @@ export async function getAdzunaLocationFilterOptions({
       country: canonicalCountryName,
     }))
   );
-  const states = getStatesForCountry(
+  const candidateStates = getStatesForCountry(
     nationwideOptions.locations,
     canonicalCountryName
   );
+  const states = await filterLocationsWithJobs(adzunaCode, candidateStates);
+  const candidateCities = getCitiesForState(
+    nationwideOptions.locations,
+    canonicalCountryName,
+    "any"
+  );
 
   if (!state || state === "any") {
+    const cities = await filterLocationsWithJobs(adzunaCode, candidateCities);
+
     return {
       countries,
       states: uniqueSorted(mergeLocationOption("", states)),
-      cities: [],
+      cities: uniqueSorted(mergeLocationOption("", cities)),
     };
   }
 
@@ -76,10 +100,14 @@ export async function getAdzunaLocationFilterOptions({
       country: canonicalCountryName,
     }))
   );
-  const cities = getCitiesForState(
+  const candidateStateCities = getCitiesForState(
     stateOptions.locations,
     canonicalCountryName,
     state
+  );
+  const cities = await filterLocationsWithJobs(
+    adzunaCode,
+    candidateStateCities
   );
 
   return {

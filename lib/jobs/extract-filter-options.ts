@@ -1,5 +1,7 @@
+import {
+  targetRolesFromProfileValue,
+} from "@/lib/profile/target-roles";
 import type { Job } from "@/types";
-
 import {
   employmentTypeOptions,
   workModeOptions,
@@ -30,6 +32,7 @@ export type JobsFilterDefaults = {
   workMode: string;
   employmentType: string;
   workRights: string;
+  targetRoles: string[];
 };
 
 function uniqueSorted(values: string[]) {
@@ -189,6 +192,7 @@ export function buildProfileFilterDefaults(profile: {
   work_mode?: string | null;
   employment_type?: string | null;
   work_rights?: string | null;
+  target_roles?: string[] | null;
 }): JobsFilterDefaults {
   return {
     country: profile.country_name?.trim() || "any",
@@ -197,6 +201,7 @@ export function buildProfileFilterDefaults(profile: {
     workMode: profile.work_mode?.trim() || "any",
     employmentType: profile.employment_type?.trim() || "any",
     workRights: profile.work_rights?.trim() || "any",
+    targetRoles: targetRolesFromProfileValue(profile.target_roles),
   };
 }
 
@@ -213,11 +218,40 @@ export function buildAdzunaWhereFromFilters(
     return state;
   }
 
-  if (country && country !== "any") {
-    return country;
+  return undefined;
+}
+
+function isValidLocationPart(value: string, country: string) {
+  const normalized = value.trim().toLowerCase();
+  const normalizedCountry = country.trim().toLowerCase();
+
+  if (!normalized) {
+    return false;
   }
 
-  return undefined;
+  if (normalized === normalizedCountry) {
+    return false;
+  }
+
+  if (
+    normalizedCountry === "united kingdom" &&
+    (normalized === "uk" ||
+      normalized === "united kingdom" ||
+      normalized === "great britain")
+  ) {
+    return false;
+  }
+
+  if (
+    normalizedCountry === "united states" &&
+    (normalized === "us" ||
+      normalized === "usa" ||
+      normalized === "united states")
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export function getStatesForCountry(
@@ -225,12 +259,18 @@ export function getStatesForCountry(
   country: string
 ) {
   if (country === "any") {
-    return uniqueSorted(locations.map((entry) => entry.state));
+    return uniqueSorted(
+      locations.map((entry) => entry.state).filter((state) => state.trim())
+    );
   }
 
   return uniqueSorted(
     locations
-      .filter((entry) => entry.country === country)
+      .filter(
+        (entry) =>
+          entry.country === country &&
+          isValidLocationPart(entry.state, country)
+      )
       .map((entry) => entry.state)
   );
 }
@@ -246,7 +286,11 @@ export function getCitiesForState(
         const matchesCountry = country === "any" || entry.country === country;
         const matchesState = state === "any" || entry.state === state;
 
-        return matchesCountry && matchesState;
+        return (
+          matchesCountry &&
+          matchesState &&
+          isValidLocationPart(entry.city, country)
+        );
       })
       .map((entry) => entry.city)
   );

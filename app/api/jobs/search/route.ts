@@ -14,7 +14,9 @@ import {
   extractFilterOptionsFromJobs,
   mergeFilterOptions,
 } from "@/lib/jobs/extract-filter-options";
+import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
+import { targetRolesFromProfileValue } from "@/lib/profile/target-roles";
 import {
   getAdzunaCodeFromCountryName,
   getAdzunaCountryByName,
@@ -85,6 +87,7 @@ export async function GET(request: NextRequest) {
   const workMode = searchParams.get("workMode");
   const employmentType = searchParams.get("employmentType");
   const workRights = searchParams.get("workRights");
+  const targetRolesParam = searchParams.get("targetRoles");
   const source = searchParams.get("source");
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const perPage = Math.min(
@@ -99,14 +102,51 @@ export async function GET(request: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
+      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
     )
     .eq("id", user.id)
     .single();
 
-  if (profileError) {
-    console.error(profileError);
+  let resolvedProfile = profile;
 
+  if (profileError) {
+    const missingTargetRolesColumn =
+      profileError.message?.includes("target_roles") ||
+      profileError.details?.includes("target_roles");
+
+    if (missingTargetRolesColumn) {
+      const { data: fallbackProfile, error: fallbackError } = await supabase
+        .from("profiles")
+        .select(
+          "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
+        )
+        .eq("id", user.id)
+        .single();
+
+      if (fallbackError) {
+        console.error(fallbackError);
+
+        return NextResponse.json(
+          { error: "Could not load user profile" },
+          { status: 500 }
+        );
+      }
+
+      resolvedProfile = {
+        ...fallbackProfile,
+        target_roles: [],
+      };
+    } else {
+      console.error(profileError);
+
+      return NextResponse.json(
+        { error: "Could not load user profile" },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!resolvedProfile) {
     return NextResponse.json(
       { error: "Could not load user profile" },
       { status: 500 }
@@ -128,9 +168,20 @@ export async function GET(request: NextRequest) {
   }
 
   const selectedSourceIds = userSources.map((source) => source.source_id);
-  const profileCountryCode = profile.country_code || "AU";
+  const profileCountryCode = resolvedProfile.country_code || "AU";
   const adzunaCountryCode = resolveAdzunaCountryCode(country, profileCountryCode);
-  const profileDefaults = buildProfileFilterDefaults(profile);
+  const profileDefaults = buildProfileFilterDefaults(resolvedProfile);
+
+  const profileTargetRoles = targetRolesFromProfileValue(
+    resolvedProfile.target_roles
+  );
+  const activeTargetRoles =
+    targetRolesParam
+      ? targetRolesParam
+          .split("|")
+          .map((role) => role.trim())
+          .filter(Boolean)
+      : profileTargetRoles;
 
   const { jobs: adzunaJobs, total: adzunaTotal } = await searchAdzunaJobs(
     adzunaCountryCode,
@@ -164,11 +215,11 @@ export async function GET(request: NextRequest) {
   const filterOptions = mergeFilterOptions(
     extractFilterOptionsFromJobs(sampleAfterSources),
     {
-      countryName: profile.country_name,
-      stateName: profile.state_name,
-      cityName: profile.city_name,
-      workMode: profile.work_mode,
-      employmentType: profile.employment_type,
+      countryName: resolvedProfile.country_name,
+      stateName: resolvedProfile.state_name,
+      cityName: resolvedProfile.city_name,
+      workMode: resolvedProfile.work_mode,
+      employmentType: resolvedProfile.employment_type,
     }
   );
 
@@ -215,15 +266,27 @@ export async function GET(request: NextRequest) {
     .map((job) => ({
       ...job,
       matchScore: calculateMatchScore(job, {
-        countryName: profile.country_name ?? "",
-        stateName: profile.state_name ?? "",
-        cityName: profile.city_name ?? "",
-        workMode: profile.work_mode ?? "",
-        employmentType: profile.employment_type ?? "",
-        workRights: profile.work_rights ?? "",
+        countryName: resolvedProfile.country_name ?? "",
+        stateName: resolvedProfile.state_name ?? "",
+        cityName: resolvedProfile.city_name ?? "",
+        workMode: resolvedProfile.work_mode ?? "",
+        employmentType: resolvedProfile.employment_type ?? "",
+        workRights: resolvedProfile.work_rights ?? "",
       }),
     }))
-    .sort((a, b) => b.matchScore - a.matchScore);
+    .sort((left, right) => {
+      const roleCompare = compareJobsByTargetRoles(
+        left,
+        right,
+        activeTargetRoles
+      );
+
+      if (roleCompare !== 0) {
+        return roleCompare;
+      }
+
+      return right.matchScore - left.matchScore;
+    });
 
   const totalPages = Math.ceil(adzunaTotal / perPage);
 

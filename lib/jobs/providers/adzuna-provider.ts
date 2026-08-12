@@ -86,15 +86,11 @@ function getCountryFromArea(area?: string[]) {
 }
 
 function getStateFromArea(area?: string[]) {
-  if (!area || area.length < 2) {
+  if (!area || area.length < 3) {
     return "";
   }
 
-  if (area.length >= 3) {
-    return area[1] ?? "";
-  }
-
-  return area[area.length - 2] ?? "";
+  return area[1] ?? "";
 }
 
 function getCompanyLogoUrl(job: AdzunaJob): string | undefined {
@@ -310,4 +306,24 @@ export async function getAdzunaJobSamples(
   }
 
   return jobs.slice(0, maxJobs);
+}
+
+export async function getAdzunaJobCount(countryCode: string, where?: string) {
+  const credentials = getAdzunaCredentials();
+
+  if (!credentials) {
+    return 0;
+  }
+
+  const { appId, appKey } = credentials;
+  const adzunaCountryCode = getAdzunaCountryCode(countryCode);
+
+  const data = await fetchAdzunaPage(adzunaCountryCode, appId, appKey, {
+    what: "",
+    where,
+    resultsPerPage: 1,
+    page: 1,
+  });
+
+  return data?.count ?? 0;
 }

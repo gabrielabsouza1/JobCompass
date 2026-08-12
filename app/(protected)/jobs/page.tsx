@@ -13,6 +13,12 @@ import {
   workModesFromProfileValue,
   workRightsFromProfileValue,
 } from "@/lib/jobs/extract-filter-options";
+import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
+import {
+  serializeTargetRolesFilter,
+  targetRolesFromProfileValue,
+  uniqueTargetRoles,
+} from "@/lib/profile/target-roles";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,6 +50,8 @@ export default function JobsPage() {
     string[]
   >([]);
   const [selectedWorkRights, setSelectedWorkRights] = useState<string[]>([]);
+  const [targetRoleOptions, setTargetRoleOptions] = useState<string[]>([]);
+  const [selectedTargetRoles, setSelectedTargetRoles] = useState<string[]>([]);
   const [filtersReady, setFiltersReady] = useState(false);
   const jobsTopRef = useRef<HTMLElement>(null);
   const pendingScrollToTopRef = useRef(false);
@@ -68,6 +76,7 @@ export default function JobsPage() {
     workMode: serializeWorkModeFilter(selectedWorkModes),
     employmentType: serializeEmploymentTypeFilter(selectedEmploymentTypes),
     workRights: serializeWorkRightsFilter(selectedWorkRights),
+    targetRoles: serializeTargetRolesFilter(selectedTargetRoles),
     source: sourceFilter !== "any" ? sourceFilter : undefined,
     enabled: filtersReady,
   });
@@ -75,6 +84,16 @@ export default function JobsPage() {
   const visibleJobs = [...jobs].sort((a, b) => {
     if (sortByNewest) {
       return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
+    }
+
+    const roleCompare = compareJobsByTargetRoles(
+      a,
+      b,
+      selectedTargetRoles
+    );
+
+    if (roleCompare !== 0) {
+      return roleCompare;
     }
 
     return b.matchScore - a.matchScore;
@@ -93,6 +112,9 @@ export default function JobsPage() {
       employmentTypesFromProfileValue(user.employmentType)
     );
     setSelectedWorkRights(workRightsFromProfileValue(user.workRights));
+    const profileRoles = targetRolesFromProfileValue(user.targetRoles);
+    setTargetRoleOptions(profileRoles);
+    setSelectedTargetRoles(profileRoles);
     setFiltersReady(true);
   }, [user]);
 
@@ -112,6 +134,7 @@ export default function JobsPage() {
     selectedWorkModes,
     selectedEmploymentTypes,
     selectedWorkRights,
+    selectedTargetRoles,
     sourceFilter,
   ]);
 
@@ -187,6 +210,7 @@ export default function JobsPage() {
       workMode: user?.workMode || "any",
       employmentType: user?.employmentType || "any",
       workRights: user?.workRights || "any",
+      targetRoles: targetRolesFromProfileValue(user?.targetRoles),
     };
 
     setCountryFilter(defaults.country);
@@ -197,6 +221,11 @@ export default function JobsPage() {
       employmentTypesFromProfileValue(defaults.employmentType)
     );
     setSelectedWorkRights(workRightsFromProfileValue(defaults.workRights));
+    const resetRoles =
+      profileDefaults?.targetRoles ??
+      targetRolesFromProfileValue(user?.targetRoles);
+    setTargetRoleOptions(resetRoles);
+    setSelectedTargetRoles(resetRoles);
     setSourceFilter("any");
     setSortByNewest(false);
     setCurrentPage(1);
@@ -259,6 +288,29 @@ export default function JobsPage() {
     });
   }
 
+  function handleToggleTargetRole(role: string) {
+    setSelectedTargetRoles((current) => {
+      if (current.includes(role)) {
+        return current.filter((item) => item !== role);
+      }
+
+      return [...current, role];
+    });
+  }
+
+  function handleAddTargetRole(role: string) {
+    const normalized = role.trim();
+
+    if (!normalized) {
+      return;
+    }
+
+    setTargetRoleOptions((current) => uniqueTargetRoles([...current, normalized]));
+    setSelectedTargetRoles((current) =>
+      uniqueTargetRoles([...current, normalized])
+    );
+  }
+
   const isPageLoading = isLoadingUser || !filtersReady || isLoadingJobs;
 
   return (
@@ -309,6 +361,8 @@ export default function JobsPage() {
         selectedWorkModes={selectedWorkModes}
         selectedEmploymentTypes={selectedEmploymentTypes}
         selectedWorkRights={selectedWorkRights}
+        targetRoleOptions={targetRoleOptions}
+        selectedTargetRoles={selectedTargetRoles}
         sourceFilter={sourceFilter}
         sortByNewest={sortByNewest}
         filterOptions={filterOptions}
@@ -319,6 +373,8 @@ export default function JobsPage() {
         onToggleWorkMode={handleToggleWorkMode}
         onToggleEmploymentType={handleToggleEmploymentType}
         onToggleWorkRights={handleToggleWorkRights}
+        onToggleTargetRole={handleToggleTargetRole}
+        onAddTargetRole={handleAddTargetRole}
         onSourceChange={setSourceFilter}
         onToggleNewest={() => setSortByNewest((current) => !current)}
         onReset={resetFiltersToProfile}

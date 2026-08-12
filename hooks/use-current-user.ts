@@ -3,6 +3,10 @@
 import { useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import {
+  parseTargetRolesFromProfile,
+  targetRolesFromProfileValue,
+} from "@/lib/profile/target-roles";
 
 type CurrentUser = {
   id: string;
@@ -17,6 +21,7 @@ type CurrentUser = {
   workMode: string;
   employmentType: string;
   workRights: string;
+  targetRoles: string[];
 };
 
 function formatName(name: string) {
@@ -57,7 +62,7 @@ export function useCurrentUser() {
       const { data: profile } = await supabase
         .from("profiles")
         .select(
-          "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights"
+          "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
         )
         .eq("id", user.id)
         .single();
@@ -87,6 +92,7 @@ export function useCurrentUser() {
         workMode: profile?.work_mode ?? "",
         employmentType: profile?.employment_type ?? "",
         workRights: profile?.work_rights ?? "",
+        targetRoles: parseTargetRolesFromProfile(profile?.target_roles),
       });
 
       setIsLoadingUser(false);
