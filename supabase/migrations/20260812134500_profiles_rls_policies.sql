@@ -1,6 +1,9 @@
--- Run in Supabase SQL Editor if profile updates fail silently.
+-- Run in Supabase SQL Editor if profile updates fail.
 
 alter table public.profiles enable row level security;
+
+grant usage on schema public to authenticated;
+grant select, insert, update on table public.profiles to authenticated;
 
 drop policy if exists "Profiles are viewable by owner" on public.profiles;
 drop policy if exists "Profiles are insertable by owner" on public.profiles;

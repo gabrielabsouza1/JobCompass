@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
-import {
-  parseTargetRolesFromProfile,
-  targetRolesFromProfileValue,
-} from "@/lib/profile/target-roles";
+import { parseTargetRolesFromProfile } from "@/lib/profile/target-roles";
 
 type CurrentUser = {
   id: string;
@@ -24,6 +21,25 @@ type CurrentUser = {
   targetRoles: string[];
 };
 
+export type ProfileSnapshot = {
+  fullName: string;
+  email: string;
+  countryCode: string;
+  countryName: string;
+  stateCode: string;
+  stateName: string;
+  cityName: string;
+  workMode: string;
+  employmentType: string;
+  workRights: string;
+  targetRoles: string[];
+};
+
+type ProfileApiResponse = {
+  profile?: ProfileSnapshot;
+  error?: string;
+};
+
 function formatName(name: string) {
   return name
     .trim()
@@ -35,78 +51,104 @@ function formatName(name: string) {
     .join(" ");
 }
 
+function mapProfileToUser(
+  authUserId: string,
+  authEmail: string,
+  profile: ProfileSnapshot
+): CurrentUser {
+  const rawFullName =
+    profile.fullName || authEmail || "User";
+  const fullName = formatName(rawFullName);
+
+  return {
+    id: authUserId,
+    email: profile.email || authEmail,
+    fullName,
+    initial: fullName.slice(0, 1).toUpperCase(),
+    countryCode: profile.countryCode,
+    countryName: profile.countryName,
+    stateCode: profile.stateCode,
+    stateName: profile.stateName,
+    cityName: profile.cityName,
+    workMode: profile.workMode,
+    employmentType: profile.employmentType,
+    workRights: profile.workRights,
+    targetRoles: parseTargetRolesFromProfile(profile.targetRoles),
+  };
+}
+
 export function useCurrentUser() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const refreshUser = useCallback(() => {
+    setReloadKey((current) => current + 1);
+  }, []);
+
+  const applyProfile = useCallback((profile: ProfileSnapshot) => {
+    setUser((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return mapProfileToUser(current.id, current.email, profile);
+    });
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadUser() {
+      setIsLoadingUser(true);
+
       const supabase = createClient();
 
       const {
-        data: { user },
+        data: { user: authUser },
       } = await supabase.auth.getUser();
 
       if (!isMounted) {
         return;
       }
 
-      if (!user) {
+      if (!authUser) {
         setUser(null);
         setIsLoadingUser(false);
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select(
-          "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
-        )
-        .eq("id", user.id)
-        .single();
+      const response = await fetch("/api/profile", {
+        cache: "no-store",
+      });
+      const data = (await response.json()) as ProfileApiResponse;
 
       if (!isMounted) {
         return;
       }
 
-      const rawFullName =
-        profile?.full_name ??
-        user.user_metadata.full_name ??
-        user.email ??
-        "User";
+      if (!response.ok || !data.profile) {
+        console.error(data.error ?? "Could not load profile");
+        setUser(null);
+        setIsLoadingUser(false);
+        return;
+      }
 
-      const fullName = formatName(rawFullName);
-
-      setUser({
-        id: user.id,
-        email: profile?.email ?? user.email ?? "",
-        fullName,
-        initial: fullName.slice(0, 1).toUpperCase(),
-        countryCode: profile?.country_code ?? "",
-        countryName: profile?.country_name ?? "",
-        stateCode: profile?.state_code ?? "",
-        stateName: profile?.state_name ?? "",
-        cityName: profile?.city_name ?? "",
-        workMode: profile?.work_mode ?? "",
-        employmentType: profile?.employment_type ?? "",
-        workRights: profile?.work_rights ?? "",
-        targetRoles: parseTargetRolesFromProfile(profile?.target_roles),
-      });
-
+      setUser(mapProfileToUser(authUser.id, authUser.email ?? "", data.profile));
       setIsLoadingUser(false);
     }
 
-    loadUser();
+    void loadUser();
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   return {
     user,
     isLoadingUser,
+    refreshUser,
+    applyProfile,
   };
 }

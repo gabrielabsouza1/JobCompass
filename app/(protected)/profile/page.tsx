@@ -35,11 +35,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import {
   normalizeTargetRole,
-  parseTargetRolesFromProfile,
-  targetRolesFromProfileValue,
   uniqueTargetRoles,
 } from "@/lib/profile/target-roles";
-import { createClient } from "@/lib/supabase/client";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
 
@@ -55,7 +52,7 @@ const skills = [
 ];
 
 export default function ProfilePage() {
-  const { user } = useCurrentUser();
+  const { user, refreshUser, applyProfile } = useCurrentUser();
   const { toastMessage, showToast } = useToast();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -79,6 +76,14 @@ export default function ProfilePage() {
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
   const displayedTargetRoles = user?.targetRoles ?? [];
+  const locationSummary =
+    user?.cityName && user?.stateName && user?.countryName
+      ? `${user.cityName}, ${user.stateName}, ${user.countryName}`
+      : "Location not set";
+  const targetRolesSummary =
+    displayedTargetRoles.length > 0
+      ? displayedTargetRoles.join(", ")
+      : "No target roles yet";
 
   const preferences = [
     {
@@ -224,39 +229,65 @@ export default function ProfilePage() {
     setTargetRoles((current) => current.filter((item) => item !== role));
   }
 
+  async function saveProfileUpdates(
+    payload: Record<string, string | string[]>
+  ) {
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = (await response.json()) as {
+      error?: string;
+      savedTargetRoles?: boolean;
+      profile?: {
+        fullName: string;
+        email: string;
+        countryCode: string;
+        countryName: string;
+        stateCode: string;
+        stateName: string;
+        cityName: string;
+        workMode: string;
+        employmentType: string;
+        workRights: string;
+        targetRoles: string[];
+      };
+    };
+
+    if (!response.ok) {
+      throw new Error(data.error ?? "Could not save profile");
+    }
+
+    if (data.profile) {
+      applyProfile(data.profile);
+    } else {
+      refreshUser();
+    }
+  }
+
   async function handleSaveTargetRoles() {
     if (!user) {
       return;
     }
 
     setIsSavingRoles(true);
+    setErrorMessage("");
 
-    const supabase = createClient();
-    const { data: updatedProfile, error } = await supabase
-      .from("profiles")
-      .update({ target_roles: targetRoles })
-      .eq("id", user.id)
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      setErrorMessage(error.message);
+    try {
+      await saveProfileUpdates({ targetRoles });
       setIsSavingRoles(false);
-      return;
-    }
-
-    if (!updatedProfile) {
+      setIsEditRolesModalOpen(false);
+      showToast("Target roles updated");
+    } catch (error) {
       setErrorMessage(
-        "Could not save target roles. Check Supabase RLS policies for the profiles table."
+        error instanceof Error ? error.message : "Could not save target roles"
       );
       setIsSavingRoles(false);
-      return;
     }
-
-    setIsSavingRoles(false);
-    setIsEditRolesModalOpen(false);
-    showToast("Target roles updated");
-    window.location.reload();
   }
 
   async function handleUpdateProfile(event: React.FormEvent<HTMLFormElement>) {
@@ -269,44 +300,28 @@ export default function ProfilePage() {
     setIsSaving(true);
     setErrorMessage("");
 
-    const supabase = createClient();
+    try {
+      await saveProfileUpdates({
+        fullName: fullName.trim(),
+        countryCode,
+        countryName,
+        stateCode,
+        stateName,
+        cityName,
+        workMode,
+        employmentType,
+        workRights,
+      });
 
-    const { data: updatedProfile, error } = await supabase
-      .from("profiles")
-      .update({
-        full_name: fullName.trim(),
-        country_code: countryCode,
-        country_name: countryName,
-        state_code: stateCode,
-        state_name: stateName,
-        city_name: cityName,
-        work_mode: workMode,
-        employment_type: employmentType,
-        work_rights: workRights,
-      })
-      .eq("id", user.id)
-      .select("id")
-      .maybeSingle();
-
-    if (error) {
-      setErrorMessage(error.message);
       setIsSaving(false);
-      return;
-    }
-
-    if (!updatedProfile) {
+      setIsEditModalOpen(false);
+      showToast("Profile updated");
+    } catch (error) {
       setErrorMessage(
-        "Could not save profile. Check Supabase RLS policies for the profiles table."
+        error instanceof Error ? error.message : "Could not save profile"
       );
       setIsSaving(false);
-      return;
     }
-
-    setIsSaving(false);
-    setIsEditModalOpen(false);
-    showToast("Profile updated");
-
-    window.location.reload();
   }
 
   return (
@@ -367,7 +382,10 @@ export default function ProfilePage() {
                       </p>
 
                       <p className="mt-1 text-sm text-slate-500">
-                        Looking for QA, testing and entry-level tech roles in Australia.
+                        {locationSummary}
+                        {displayedTargetRoles.length > 0
+                          ? ` · targeting ${displayedTargetRoles.length} role${displayedTargetRoles.length === 1 ? "" : "s"}`
+                          : ""}
                       </p>
                     </div>
                   </div>
@@ -531,9 +549,7 @@ export default function ProfilePage() {
                     <p className="text-sm font-semibold text-slate-950">
                       Location added
                     </p>
-                    <p className="text-sm text-slate-500">
-                      Melbourne, Victoria
-                    </p>
+                    <p className="text-sm text-slate-500">{locationSummary}</p>
                   </div>
                 </div>
 
@@ -543,9 +559,7 @@ export default function ProfilePage() {
                     <p className="text-sm font-semibold text-slate-950">
                       Target roles selected
                     </p>
-                    <p className="text-sm text-slate-500">
-                      QA and entry-level tech roles
-                    </p>
+                    <p className="text-sm text-slate-500">{targetRolesSummary}</p>
                   </div>
                 </div>
 

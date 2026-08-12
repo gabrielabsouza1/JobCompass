@@ -1,0 +1,278 @@
+import { NextRequest, NextResponse } from "next/server";
+
+import { requireApiUser } from "@/lib/auth/require-api-user";
+import { parseTargetRolesFromProfile, uniqueTargetRoles } from "@/lib/profile/target-roles";
+import { createClient } from "@/lib/supabase/server";
+
+type ProfileUpdateBody = {
+  fullName?: string;
+  countryCode?: string;
+  countryName?: string;
+  stateCode?: string;
+  stateName?: string;
+  cityName?: string;
+  workMode?: string;
+  employmentType?: string;
+  workRights?: string;
+  targetRoles?: string[];
+};
+
+const PROFILE_SELECT_WITH_TARGET_ROLES =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles";
+
+const PROFILE_SELECT_WITHOUT_TARGET_ROLES =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights";
+
+export const dynamic = "force-dynamic";
+
+function buildProfileUpdate(body: ProfileUpdateBody) {
+  const update: Record<string, string | string[]> = {};
+
+  if (body.fullName !== undefined) {
+    update.full_name = body.fullName.trim();
+  }
+
+  if (body.countryCode !== undefined) {
+    update.country_code = body.countryCode;
+  }
+
+  if (body.countryName !== undefined) {
+    update.country_name = body.countryName;
+  }
+
+  if (body.stateCode !== undefined) {
+    update.state_code = body.stateCode;
+  }
+
+  if (body.stateName !== undefined) {
+    update.state_name = body.stateName;
+  }
+
+  if (body.cityName !== undefined) {
+    update.city_name = body.cityName;
+  }
+
+  if (body.workMode !== undefined) {
+    update.work_mode = body.workMode;
+  }
+
+  if (body.employmentType !== undefined) {
+    update.employment_type = body.employmentType;
+  }
+
+  if (body.workRights !== undefined) {
+    update.work_rights = body.workRights;
+  }
+
+  if (body.targetRoles !== undefined) {
+    update.target_roles = uniqueTargetRoles(body.targetRoles);
+  }
+
+  return update;
+}
+
+function mapProfileRow(
+  profile: Record<string, unknown> | null,
+  authEmail: string
+) {
+  return {
+    fullName: (profile?.full_name as string | undefined) ?? "",
+    email: (profile?.email as string | undefined) ?? authEmail,
+    countryCode: (profile?.country_code as string | undefined) ?? "",
+    countryName: (profile?.country_name as string | undefined) ?? "",
+    stateCode: (profile?.state_code as string | undefined) ?? "",
+    stateName: (profile?.state_name as string | undefined) ?? "",
+    cityName: (profile?.city_name as string | undefined) ?? "",
+    workMode: (profile?.work_mode as string | undefined) ?? "",
+    employmentType: (profile?.employment_type as string | undefined) ?? "",
+    workRights: (profile?.work_rights as string | undefined) ?? "",
+    targetRoles: parseTargetRolesFromProfile(profile?.target_roles),
+  };
+}
+
+async function loadProfileForUser(userId: string, authEmail: string) {
+  const supabase = await createClient();
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select(PROFILE_SELECT_WITH_TARGET_ROLES)
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (!error) {
+    return mapProfileRow(profile, authEmail);
+  }
+
+  const missingTargetRolesColumn =
+    error.message?.includes("target_roles") ||
+    error.details?.includes("target_roles");
+
+  if (!missingTargetRolesColumn) {
+    throw error;
+  }
+
+  const { data: fallbackProfile, error: fallbackError } = await supabase
+    .from("profiles")
+    .select(PROFILE_SELECT_WITHOUT_TARGET_ROLES)
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (fallbackError) {
+    throw fallbackError;
+  }
+
+  return mapProfileRow(
+    {
+      ...fallbackProfile,
+      target_roles: [],
+    },
+    authEmail
+  );
+}
+
+export async function GET() {
+  const { user, response } = await requireApiUser();
+
+  if (response) {
+    return response;
+  }
+
+  try {
+    const profile = await loadProfileForUser(user.id, user.email ?? "");
+
+    return NextResponse.json({ profile });
+  } catch (error) {
+    console.error(error);
+
+    return NextResponse.json(
+      { error: "Could not load profile" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const { user, response } = await requireApiUser();
+
+  if (response) {
+    return response;
+  }
+
+  let body: ProfileUpdateBody;
+
+  try {
+    body = (await request.json()) as ProfileUpdateBody;
+  } catch {
+    return NextResponse.json({ error: "Invalid profile payload" }, { status: 400 });
+  }
+
+  const updatePayload = buildProfileUpdate(body);
+
+  if (Object.keys(updatePayload).length === 0) {
+    return NextResponse.json({ error: "No profile fields to update" }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from("profiles")
+    .update(updatePayload)
+    .eq("id", user.id)
+    .select(PROFILE_SELECT_WITH_TARGET_ROLES)
+    .maybeSingle();
+
+  if (updateError) {
+    const missingTargetRolesColumn =
+      updateError.message?.includes("target_roles") ||
+      updateError.details?.includes("target_roles");
+
+    if (missingTargetRolesColumn && updatePayload.target_roles) {
+      const { target_roles: targetRoles, ...rest } = updatePayload;
+
+      if (Object.keys(rest).length > 0) {
+        const { error: partialError } = await supabase
+          .from("profiles")
+          .update(rest)
+          .eq("id", user.id);
+
+        if (partialError) {
+          console.error(partialError);
+
+          return NextResponse.json({ error: partialError.message }, { status: 500 });
+        }
+      }
+
+      return NextResponse.json({
+        error:
+          "The target_roles column is missing. Run the target_roles migration in Supabase.",
+        savedTargetRoles: false,
+      }, { status: 400 });
+    }
+
+    console.error(updateError);
+
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  if (updatedProfile) {
+    return NextResponse.json({
+      profile: mapProfileRow(updatedProfile, user.email ?? ""),
+    });
+  }
+
+  const { count, error: countError } = await supabase
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("id", user.id);
+
+  if (countError) {
+    console.error(countError);
+
+    return NextResponse.json({ error: countError.message }, { status: 500 });
+  }
+
+  if (count && count > 0) {
+    try {
+      const profile = await loadProfileForUser(user.id, user.email ?? "");
+
+      return NextResponse.json({ profile });
+    } catch (reloadError) {
+      console.error(reloadError);
+
+      return NextResponse.json(
+        { error: "Profile updated but could not be reloaded" },
+        { status: 500 }
+      );
+    }
+  }
+
+  const { data: insertedProfile, error: insertError } = await supabase
+    .from("profiles")
+    .insert({
+      id: user.id,
+      email: user.email ?? "",
+      ...updatePayload,
+    })
+    .select(PROFILE_SELECT_WITH_TARGET_ROLES)
+    .maybeSingle();
+
+  if (insertError) {
+    console.error(insertError);
+
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  if (!insertedProfile) {
+    return NextResponse.json(
+      {
+        error:
+          "Profile save was blocked. Run the profiles RLS migration in Supabase.",
+      },
+      { status: 403 }
+    );
+  }
+
+  return NextResponse.json({
+    profile: mapProfileRow(insertedProfile, user.email ?? ""),
+  });
+}
