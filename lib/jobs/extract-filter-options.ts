@@ -1,8 +1,11 @@
+import {
+  targetRolesFromProfileValue,
+} from "@/lib/profile/target-roles";
 import type { Job } from "@/types";
-
 import {
   employmentTypeOptions,
   workModeOptions,
+  workRightsOptions,
 } from "@/data/profile-options";
 
 export type JobsLocationOption = {
@@ -29,6 +32,7 @@ export type JobsFilterDefaults = {
   workMode: string;
   employmentType: string;
   workRights: string;
+  targetRoles: string[];
 };
 
 function uniqueSorted(values: string[]) {
@@ -36,6 +40,16 @@ function uniqueSorted(values: string[]) {
     a.localeCompare(b)
   );
 }
+
+export const ALL_WORK_MODE_VALUES = ["remote", "hybrid", "onsite"] as const;
+
+export const ALL_EMPLOYMENT_TYPE_VALUES = employmentTypeOptions
+  .filter((option) => option.value !== "any")
+  .map((option) => option.value);
+
+export const ALL_WORK_RIGHTS_VALUES = workRightsOptions.map(
+  (option) => option.value
+);
 
 export function jobEmploymentTypeToFilterValue(employmentType: string) {
   const normalized = employmentType.toLowerCase().trim();
@@ -177,6 +191,8 @@ export function buildProfileFilterDefaults(profile: {
   city_name?: string | null;
   work_mode?: string | null;
   employment_type?: string | null;
+  work_rights?: string | null;
+  target_roles?: string[] | null;
 }): JobsFilterDefaults {
   return {
     country: profile.country_name?.trim() || "any",
@@ -184,7 +200,8 @@ export function buildProfileFilterDefaults(profile: {
     city: profile.city_name?.trim() || "any",
     workMode: profile.work_mode?.trim() || "any",
     employmentType: profile.employment_type?.trim() || "any",
-    workRights: "any",
+    workRights: profile.work_rights?.trim() || "any",
+    targetRoles: targetRolesFromProfileValue(profile.target_roles),
   };
 }
 
@@ -201,11 +218,40 @@ export function buildAdzunaWhereFromFilters(
     return state;
   }
 
-  if (country && country !== "any") {
-    return country;
+  return undefined;
+}
+
+function isValidLocationPart(value: string, country: string) {
+  const normalized = value.trim().toLowerCase();
+  const normalizedCountry = country.trim().toLowerCase();
+
+  if (!normalized) {
+    return false;
   }
 
-  return undefined;
+  if (normalized === normalizedCountry) {
+    return false;
+  }
+
+  if (
+    normalizedCountry === "united kingdom" &&
+    (normalized === "uk" ||
+      normalized === "united kingdom" ||
+      normalized === "great britain")
+  ) {
+    return false;
+  }
+
+  if (
+    normalizedCountry === "united states" &&
+    (normalized === "us" ||
+      normalized === "usa" ||
+      normalized === "united states")
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export function getStatesForCountry(
@@ -213,12 +259,18 @@ export function getStatesForCountry(
   country: string
 ) {
   if (country === "any") {
-    return uniqueSorted(locations.map((entry) => entry.state));
+    return uniqueSorted(
+      locations.map((entry) => entry.state).filter((state) => state.trim())
+    );
   }
 
   return uniqueSorted(
     locations
-      .filter((entry) => entry.country === country)
+      .filter(
+        (entry) =>
+          entry.country === country &&
+          isValidLocationPart(entry.state, country)
+      )
       .map((entry) => entry.state)
   );
 }
@@ -234,7 +286,11 @@ export function getCitiesForState(
         const matchesCountry = country === "any" || entry.country === country;
         const matchesState = state === "any" || entry.state === state;
 
-        return matchesCountry && matchesState;
+        return (
+          matchesCountry &&
+          matchesState &&
+          isValidLocationPart(entry.city, country)
+        );
       })
       .map((entry) => entry.city)
   );
@@ -261,8 +317,143 @@ export function getWorkModeLabel(value: string) {
   );
 }
 
+export function getWorkRightsLabel(value: string) {
+  if (!value || value === "any") return "Any";
+
+  return (
+    workRightsOptions.find((option) => option.value === value)?.label ?? value
+  );
+}
+
 export function getWorkRightsRiskLabel(value: string) {
   if (value === "any") return "Any";
 
+  const normalized = value.toLowerCase();
+
+  if (normalized === "low") return "Low";
+  if (normalized === "medium") return "Medium";
+  if (normalized === "high") return "High";
+
   return value;
+}
+
+export function formatLocationFilterLabel(
+  city: string,
+  state: string,
+  country: string
+) {
+  if (city && city !== "any") {
+    return country && country !== "any" ? `${city}, ${country}` : city;
+  }
+
+  if (state && state !== "any") {
+    return country && country !== "any" ? `${state}, ${country}` : state;
+  }
+
+  if (country && country !== "any") {
+    return country;
+  }
+
+  return "Any location";
+}
+
+export function parseMultiFilter(value: string) {
+  if (!value || value === "any") {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+export function serializeMultiFilter(
+  values: string[],
+  allValues: readonly string[]
+) {
+  const normalized = values.map((value) => value.toLowerCase());
+
+  if (normalized.length === 0) {
+    return "any";
+  }
+
+  const allSelected = allValues.every((value) =>
+    normalized.includes(value.toLowerCase())
+  );
+
+  if (allSelected) {
+    return "any";
+  }
+
+  return normalized.join(",");
+}
+
+export function workModesFromProfileValue(value?: string | null) {
+  if (!value || value === "any") {
+    return [...ALL_WORK_MODE_VALUES];
+  }
+
+  return [value.toLowerCase()];
+}
+
+export function employmentTypesFromProfileValue(value?: string | null) {
+  if (!value || value === "any") {
+    return [...ALL_EMPLOYMENT_TYPE_VALUES];
+  }
+
+  return [jobEmploymentTypeToFilterValue(value)];
+}
+
+export function isJobCompatibleWithWorkRight(job: Job, workRight: string) {
+  const normalized = workRight.toLowerCase().trim();
+  const risk = job.workRightsRisk;
+
+  if (risk === "Low") {
+    return true;
+  }
+
+  if (risk === "Medium") {
+    return (
+      normalized === "full_time_allowed" || normalized === "citizen_or_pr"
+    );
+  }
+
+  if (risk === "High") {
+    return normalized === "citizen_or_pr";
+  }
+
+  return true;
+}
+
+export function workRightsFromProfileValue(value?: string | null) {
+  if (!value || value === "any") {
+    return [...ALL_WORK_RIGHTS_VALUES];
+  }
+
+  return [value];
+}
+
+export function parseWorkModeFilter(value: string) {
+  return parseMultiFilter(value);
+}
+
+export function serializeWorkModeFilter(modes: string[]) {
+  return serializeMultiFilter(modes, ALL_WORK_MODE_VALUES);
+}
+
+export function parseEmploymentTypeFilter(value: string) {
+  return parseMultiFilter(value);
+}
+
+export function serializeEmploymentTypeFilter(types: string[]) {
+  return serializeMultiFilter(types, ALL_EMPLOYMENT_TYPE_VALUES);
+}
+
+export function parseWorkRightsFilter(value: string) {
+  return parseMultiFilter(value);
+}
+
+export function serializeWorkRightsFilter(workRights: string[]) {
+  return serializeMultiFilter(workRights, ALL_WORK_RIGHTS_VALUES);
 }

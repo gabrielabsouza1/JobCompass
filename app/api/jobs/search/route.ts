@@ -1,20 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
+import { buildAdzunaWhatFromQueryAndRoles } from "@/lib/jobs/build-adzuna-search-query";
 import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 import {
+  employmentTypesFromProfileValue,
+  isJobCompatibleWithWorkRight,
+  parseEmploymentTypeFilter,
+  parseWorkModeFilter,
+  parseWorkRightsFilter,
+  jobEmploymentTypeToFilterValue,
   buildAdzunaWhereFromFilters,
   buildProfileFilterDefaults,
   extractFilterOptionsFromJobs,
-  jobEmploymentTypeToFilterValue,
   mergeFilterOptions,
 } from "@/lib/jobs/extract-filter-options";
+import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
+import { targetRolesFromProfileValue } from "@/lib/profile/target-roles";
+import {
+  getAdzunaCodeFromCountryName,
+  getAdzunaCountryByName,
+} from "@/lib/jobs/adzuna-countries";
 
 async function searchAdzunaJobs(
   countryCode: string,
   filters: {
     query: string;
+    targetRoles: string[];
     country: string | null;
     state: string | null;
     city: string | null;
@@ -23,26 +36,44 @@ async function searchAdzunaJobs(
     perPage: number;
   }
 ) {
-  const searchTerm = filters.query.trim();
+  const { what, whatOr } = buildAdzunaWhatFromQueryAndRoles(
+    filters.query,
+    filters.targetRoles
+  );
   const where = buildAdzunaWhereFromFilters(
     filters.country,
     filters.state,
     filters.city
   );
 
-  let what = searchTerm || undefined;
+  let resolvedWhat = what;
+  const workModes = parseWorkModeFilter(filters.workMode ?? "");
 
-  if (filters.workMode?.toLowerCase() === "remote" && !what) {
-    what = "remote";
+  if (workModes.includes("remote") && !resolvedWhat && !whatOr) {
+    resolvedWhat = "remote";
   }
 
   return getAdzunaJobs({
     countryCode,
-    what,
+    what: resolvedWhat,
+    whatOr,
     where,
     resultsPerPage: filters.perPage,
     page: filters.page,
   });
+}
+
+function resolveAdzunaCountryCode(
+  countryFilter: string | null,
+  profileCountryCode: string
+) {
+  if (countryFilter && countryFilter !== "any") {
+    const adzunaCountry = getAdzunaCountryByName(countryFilter);
+
+    return adzunaCountry?.code ?? getAdzunaCodeFromCountryName(countryFilter);
+  }
+
+  return profileCountryCode.toLowerCase();
 }
 
 export async function GET(request: NextRequest) {
@@ -61,6 +92,7 @@ export async function GET(request: NextRequest) {
   const workMode = searchParams.get("workMode");
   const employmentType = searchParams.get("employmentType");
   const workRights = searchParams.get("workRights");
+  const targetRolesParam = searchParams.get("targetRoles");
   const source = searchParams.get("source");
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const perPage = Math.min(
@@ -75,14 +107,51 @@ export async function GET(request: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
+      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
     )
     .eq("id", user.id)
     .single();
 
-  if (profileError) {
-    console.error(profileError);
+  let resolvedProfile = profile;
 
+  if (profileError) {
+    const missingTargetRolesColumn =
+      profileError.message?.includes("target_roles") ||
+      profileError.details?.includes("target_roles");
+
+    if (missingTargetRolesColumn) {
+      const { data: fallbackProfile, error: fallbackError } = await supabase
+        .from("profiles")
+        .select(
+          "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
+        )
+        .eq("id", user.id)
+        .single();
+
+      if (fallbackError) {
+        console.error(fallbackError);
+
+        return NextResponse.json(
+          { error: "Could not load user profile" },
+          { status: 500 }
+        );
+      }
+
+      resolvedProfile = {
+        ...fallbackProfile,
+        target_roles: [],
+      };
+    } else {
+      console.error(profileError);
+
+      return NextResponse.json(
+        { error: "Could not load user profile" },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!resolvedProfile) {
     return NextResponse.json(
       { error: "Could not load user profile" },
       { status: 500 }
@@ -104,13 +173,26 @@ export async function GET(request: NextRequest) {
   }
 
   const selectedSourceIds = userSources.map((source) => source.source_id);
-  const countryCode = profile.country_code || "AU";
-  const profileDefaults = buildProfileFilterDefaults(profile);
+  const profileCountryCode = resolvedProfile.country_code || "AU";
+  const adzunaCountryCode = resolveAdzunaCountryCode(country, profileCountryCode);
+  const profileDefaults = buildProfileFilterDefaults(resolvedProfile);
+
+  const profileTargetRoles = targetRolesFromProfileValue(
+    resolvedProfile.target_roles
+  );
+  const activeTargetRoles =
+    targetRolesParam
+      ? targetRolesParam
+          .split("|")
+          .map((role) => role.trim())
+          .filter(Boolean)
+      : profileTargetRoles;
 
   const { jobs: adzunaJobs, total: adzunaTotal } = await searchAdzunaJobs(
-    countryCode,
+    adzunaCountryCode,
     {
       query,
+      targetRoles: activeTargetRoles,
       country,
       state,
       city,
@@ -120,8 +202,9 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { jobs: sampleJobs } = await searchAdzunaJobs(countryCode, {
+  const { jobs: sampleJobs } = await searchAdzunaJobs(adzunaCountryCode, {
     query,
+    targetRoles: [],
     country: null,
     state: null,
     city: null,
@@ -139,11 +222,11 @@ export async function GET(request: NextRequest) {
   const filterOptions = mergeFilterOptions(
     extractFilterOptionsFromJobs(sampleAfterSources),
     {
-      countryName: profile.country_name,
-      stateName: profile.state_name,
-      cityName: profile.city_name,
-      workMode: profile.work_mode,
-      employmentType: profile.employment_type,
+      countryName: resolvedProfile.country_name,
+      stateName: resolvedProfile.state_name,
+      cityName: resolvedProfile.city_name,
+      workMode: resolvedProfile.work_mode,
+      employmentType: resolvedProfile.employment_type,
     }
   );
 
@@ -161,21 +244,27 @@ export async function GET(request: NextRequest) {
       : sourceFilteredJobs;
 
   const visibleJobs = sourceScopedJobs.filter((job) => {
+    const workModeFilters = parseWorkModeFilter(workMode ?? "");
+
     const matchesWorkMode =
-      !workMode ||
-      workMode === "any" ||
-      job.workMode.toLowerCase() === workMode.toLowerCase();
+      workModeFilters.length === 0 ||
+      workModeFilters.includes(job.workMode.toLowerCase());
+
+    const employmentFilters = parseEmploymentTypeFilter(employmentType ?? "");
 
     const matchesEmploymentType =
-      !employmentType ||
-      employmentType === "any" ||
-      jobEmploymentTypeToFilterValue(job.employmentType) ===
-        employmentType.toLowerCase();
+      employmentFilters.length === 0 ||
+      employmentFilters.includes(
+        jobEmploymentTypeToFilterValue(job.employmentType)
+      );
+
+    const workRightsFilters = parseWorkRightsFilter(workRights ?? "");
 
     const matchesWorkRights =
-      !workRights ||
-      workRights === "any" ||
-      job.workRightsRisk.toLowerCase() === workRights.toLowerCase();
+      workRightsFilters.length === 0 ||
+      workRightsFilters.some((workRight) =>
+        isJobCompatibleWithWorkRight(job, workRight)
+      );
 
     return matchesWorkMode && matchesEmploymentType && matchesWorkRights;
   });
@@ -184,15 +273,27 @@ export async function GET(request: NextRequest) {
     .map((job) => ({
       ...job,
       matchScore: calculateMatchScore(job, {
-        countryName: profile.country_name ?? "",
-        stateName: profile.state_name ?? "",
-        cityName: profile.city_name ?? "",
-        workMode: profile.work_mode ?? "",
-        employmentType: profile.employment_type ?? "",
-        workRights: profile.work_rights ?? "",
+        countryName: resolvedProfile.country_name ?? "",
+        stateName: resolvedProfile.state_name ?? "",
+        cityName: resolvedProfile.city_name ?? "",
+        workMode: resolvedProfile.work_mode ?? "",
+        employmentType: resolvedProfile.employment_type ?? "",
+        workRights: resolvedProfile.work_rights ?? "",
       }),
     }))
-    .sort((a, b) => b.matchScore - a.matchScore);
+    .sort((left, right) => {
+      const roleCompare = compareJobsByTargetRoles(
+        left,
+        right,
+        activeTargetRoles
+      );
+
+      if (roleCompare !== 0) {
+        return roleCompare;
+      }
+
+      return right.matchScore - left.matchScore;
+    });
 
   const totalPages = Math.ceil(adzunaTotal / perPage);
 

@@ -33,16 +33,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { createClient } from "@/lib/supabase/client";
+import {
+  normalizeTargetRole,
+  uniqueTargetRoles,
+} from "@/lib/profile/target-roles";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
-
-const targetRoles = [
-  "QA Tester",
-  "Manual Tester",
-  "Junior Software Tester",
-  "IT Support Officer",
-];
 
 const skills = [
   "Manual Testing",
@@ -56,7 +52,7 @@ const skills = [
 ];
 
 export default function ProfilePage() {
-  const { user } = useCurrentUser();
+  const { user, refreshUser, applyProfile } = useCurrentUser();
   const { toastMessage, showToast } = useToast();
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -70,10 +66,24 @@ export default function ProfilePage() {
   const [workMode, setWorkMode] = useState("");
   const [employmentType, setEmploymentType] = useState("");
   const [workRights, setWorkRights] = useState("");
+  const [isEditRolesModalOpen, setIsEditRolesModalOpen] = useState(false);
+  const [targetRoles, setTargetRoles] = useState<string[]>([]);
+  const [newTargetRoleInput, setNewTargetRoleInput] = useState("");
+  const [isSavingRoles, setIsSavingRoles] = useState(false);
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [states, setStates] = useState<StateOption[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
+  const displayedTargetRoles = user?.targetRoles ?? [];
+  const locationSummary =
+    user?.cityName && user?.stateName && user?.countryName
+      ? `${user.cityName}, ${user.stateName}, ${user.countryName}`
+      : "Location not set";
+  const targetRolesSummary =
+    displayedTargetRoles.length > 0
+      ? displayedTargetRoles.join(", ")
+      : "No target roles yet";
 
   const preferences = [
     {
@@ -198,6 +208,88 @@ export default function ProfilePage() {
     }
   }
 
+  async function openEditTargetRolesModal() {
+    setTargetRoles(displayedTargetRoles);
+    setNewTargetRoleInput("");
+    setIsEditRolesModalOpen(true);
+  }
+
+  function handleAddProfileTargetRole() {
+    const normalized = normalizeTargetRole(newTargetRoleInput);
+
+    if (!normalized) {
+      return;
+    }
+
+    setTargetRoles((current) => uniqueTargetRoles([...current, normalized]));
+    setNewTargetRoleInput("");
+  }
+
+  function handleRemoveProfileTargetRole(role: string) {
+    setTargetRoles((current) => current.filter((item) => item !== role));
+  }
+
+  async function saveProfileUpdates(
+    payload: Record<string, string | string[]>
+  ) {
+    const response = await fetch("/api/profile", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = (await response.json()) as {
+      error?: string;
+      savedTargetRoles?: boolean;
+      profile?: {
+        fullName: string;
+        email: string;
+        countryCode: string;
+        countryName: string;
+        stateCode: string;
+        stateName: string;
+        cityName: string;
+        workMode: string;
+        employmentType: string;
+        workRights: string;
+        targetRoles: string[];
+      };
+    };
+
+    if (!response.ok) {
+      throw new Error(data.error ?? "Could not save profile");
+    }
+
+    if (data.profile) {
+      applyProfile(data.profile);
+    } else {
+      refreshUser();
+    }
+  }
+
+  async function handleSaveTargetRoles() {
+    if (!user) {
+      return;
+    }
+
+    setIsSavingRoles(true);
+    setErrorMessage("");
+
+    try {
+      await saveProfileUpdates({ targetRoles });
+      setIsSavingRoles(false);
+      setIsEditRolesModalOpen(false);
+      showToast("Target roles updated");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Could not save target roles"
+      );
+      setIsSavingRoles(false);
+    }
+  }
+
   async function handleUpdateProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -208,34 +300,28 @@ export default function ProfilePage() {
     setIsSaving(true);
     setErrorMessage("");
 
-    const supabase = createClient();
+    try {
+      await saveProfileUpdates({
+        fullName: fullName.trim(),
+        countryCode,
+        countryName,
+        stateCode,
+        stateName,
+        cityName,
+        workMode,
+        employmentType,
+        workRights,
+      });
 
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        full_name: fullName.trim(),
-        country_code: countryCode,
-        country_name: countryName,
-        state_code: stateCode,
-        state_name: stateName,
-        city_name: cityName,
-        work_mode: workMode,
-        employment_type: employmentType,
-        work_rights: workRights,
-      })
-      .eq("id", user.id);
-
-    if (error) {
-      setErrorMessage(error.message);
       setIsSaving(false);
-      return;
+      setIsEditModalOpen(false);
+      showToast("Profile updated");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "Could not save profile"
+      );
+      setIsSaving(false);
     }
-
-    setIsSaving(false);
-    setIsEditModalOpen(false);
-    showToast("Profile updated");
-
-    window.location.reload();
   }
 
   return (
@@ -296,7 +382,10 @@ export default function ProfilePage() {
                       </p>
 
                       <p className="mt-1 text-sm text-slate-500">
-                        Looking for QA, testing and entry-level tech roles in Australia.
+                        {locationSummary}
+                        {displayedTargetRoles.length > 0
+                          ? ` · targeting ${displayedTargetRoles.length} role${displayedTargetRoles.length === 1 ? "" : "s"}`
+                          : ""}
                       </p>
                     </div>
                   </div>
@@ -351,20 +440,27 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   className="rounded-2xl border-slate-200"
+                  onClick={openEditTargetRolesModal}
                 >
                   Edit
                 </Button>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {targetRoles.map((role) => (
-                  <Badge
-                    key={role}
-                    className="rounded-full bg-teal-50 px-4 py-2 text-teal-700 hover:bg-teal-50"
-                  >
-                    {role}
-                  </Badge>
-                ))}
+                {displayedTargetRoles.length > 0 ? (
+                  displayedTargetRoles.map((role) => (
+                    <Badge
+                      key={role}
+                      className="rounded-full bg-teal-50 px-4 py-2 text-teal-700 hover:bg-teal-50"
+                    >
+                      {role}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No target roles yet. Add roles to improve job matching.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -453,9 +549,7 @@ export default function ProfilePage() {
                     <p className="text-sm font-semibold text-slate-950">
                       Location added
                     </p>
-                    <p className="text-sm text-slate-500">
-                      Melbourne, Victoria
-                    </p>
+                    <p className="text-sm text-slate-500">{locationSummary}</p>
                   </div>
                 </div>
 
@@ -465,9 +559,7 @@ export default function ProfilePage() {
                     <p className="text-sm font-semibold text-slate-950">
                       Target roles selected
                     </p>
-                    <p className="text-sm text-slate-500">
-                      QA and entry-level tech roles
-                    </p>
+                    <p className="text-sm text-slate-500">{targetRolesSummary}</p>
                   </div>
                 </div>
 
@@ -768,6 +860,76 @@ export default function ProfilePage() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+
+      {isEditRolesModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-xl">
+            <div className="border-b border-slate-100 px-6 py-5">
+              <h2 className="text-xl font-bold text-slate-950">Edit target roles</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                These roles feed your jobs filters and keyword ranking.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="flex flex-wrap gap-2">
+                {targetRoles.map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => handleRemoveProfileTargetRole(role)}
+                    className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-4 py-2 text-sm font-semibold text-teal-700 transition hover:bg-teal-100"
+                  >
+                    {role}
+                    <span className="text-teal-500">×</span>
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Add role
+                </label>
+                <input
+                  value={newTargetRoleInput}
+                  onChange={(event) => setNewTargetRoleInput(event.target.value)}
+                  placeholder="e.g. Junior front end developer"
+                  className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+                />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAddProfileTargetRole}
+                className="h-10 rounded-2xl border-slate-200"
+              >
+                Add to list
+              </Button>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-5 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditRolesModalOpen(false)}
+                className="h-11 rounded-2xl border-slate-200 px-6"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSaveTargetRoles}
+                disabled={isSavingRoles || targetRoles.length === 0}
+                className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingRoles ? "Saving..." : "Save roles"}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}

@@ -18,6 +18,7 @@ export type UseJobsFilters = {
   workMode?: string;
   employmentType?: string;
   workRights?: string;
+  targetRoles?: string;
   source?: string;
   sort?: string;
   enabled?: boolean;
@@ -71,6 +72,10 @@ function buildSearchUrl(filters: UseJobsFilters) {
     params.set("workRights", filters.workRights);
   }
 
+  if (filters.targetRoles) {
+    params.set("targetRoles", filters.targetRoles);
+  }
+
   if (filters.source) {
     params.set("source", filters.source);
   }
@@ -93,6 +98,7 @@ export function useJobs(filters?: UseJobsFilters) {
   const workMode = filters?.workMode ?? "";
   const employmentType = filters?.employmentType ?? "";
   const workRights = filters?.workRights ?? "";
+  const targetRoles = filters?.targetRoles ?? "";
   const source = filters?.source;
   const sort = filters?.sort;
 
@@ -132,6 +138,7 @@ export function useJobs(filters?: UseJobsFilters) {
             workMode,
             employmentType,
             workRights,
+            targetRoles,
             source,
             sort,
           })
@@ -188,6 +195,7 @@ export function useJobs(filters?: UseJobsFilters) {
     workMode,
     employmentType,
     workRights,
+    targetRoles,
     source,
     sort,
     reloadKey,

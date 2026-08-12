@@ -1,6 +1,10 @@
 import type { Job } from "@/types";
 import { normalizeJob } from "@/lib/jobs/job-normalizer";
 import { normalizeAdzunaStaticUrl } from "@/lib/jobs/extract-adzuna-logo";
+import {
+  ADZUNA_COUNTRIES,
+  getAdzunaCodeFromCountryName,
+} from "@/lib/jobs/adzuna-countries";
 
 type AdzunaJob = {
   id: string;
@@ -34,6 +38,7 @@ type AdzunaSearchResponse = {
 export type GetAdzunaJobsParams = {
   countryCode?: string;
   what?: string;
+  whatOr?: string;
   where?: string;
   resultsPerPage?: number;
   page?: number;
@@ -45,11 +50,17 @@ export type AdzunaJobsPageResult = {
 };
 
 function getAdzunaCountryCode(countryCode?: string) {
-  const value = countryCode?.toLowerCase();
+  const value = countryCode?.trim();
 
-  if (!value) return "au";
+  if (!value) {
+    return "au";
+  }
 
-  return value;
+  if (value.length === 2) {
+    return value.toLowerCase();
+  }
+
+  return getAdzunaCodeFromCountryName(value);
 }
 
 function getEmploymentType(contractTime?: string) {
@@ -76,15 +87,11 @@ function getCountryFromArea(area?: string[]) {
 }
 
 function getStateFromArea(area?: string[]) {
-  if (!area || area.length < 2) {
+  if (!area || area.length < 3) {
     return "";
   }
 
-  if (area.length >= 3) {
-    return area[1] ?? "";
-  }
-
-  return area[area.length - 2] ?? "";
+  return area[1] ?? "";
 }
 
 function getCompanyLogoUrl(job: AdzunaJob): string | undefined {
@@ -143,11 +150,13 @@ async function fetchAdzunaPage(
   appKey: string,
   {
     what,
+    whatOr,
     where,
     resultsPerPage,
     page,
   }: {
     what: string;
+    whatOr?: string;
     where?: string;
     resultsPerPage: number;
     page: number;
@@ -164,6 +173,10 @@ async function fetchAdzunaPage(
 
   if (what) {
     url.searchParams.set("what", what);
+  }
+
+  if (whatOr) {
+    url.searchParams.set("what_or", whatOr);
   }
 
   if (where) {
@@ -187,6 +200,7 @@ async function fetchAdzunaPage(
 export async function getAdzunaJobs({
   countryCode = "AU",
   what,
+  whatOr,
   where,
   resultsPerPage = 10,
   page = 1,
@@ -203,6 +217,7 @@ export async function getAdzunaJobs({
 
   const data = await fetchAdzunaPage(adzunaCountryCode, appId, appKey, {
     what: what ?? "",
+    whatOr,
     where,
     resultsPerPage,
     page,
@@ -216,4 +231,108 @@ export async function getAdzunaJobs({
     jobs: data.results.map(normalizeAdzunaJob),
     total: data.count,
   };
+}
+
+function getAdzunaCredentials() {
+  const appId = process.env.ADZUNA_APP_ID;
+  const appKey = process.env.ADZUNA_APP_KEY;
+
+  if (!appId || !appKey) {
+    return null;
+  }
+
+  return { appId, appKey };
+}
+
+export async function getAdzunaCountriesWithJobs() {
+  const credentials = getAdzunaCredentials();
+
+  if (!credentials) {
+    return [];
+  }
+
+  const { appId, appKey } = credentials;
+
+  const results = await Promise.all(
+    ADZUNA_COUNTRIES.map(async (country) => {
+      const data = await fetchAdzunaPage(country.code, appId, appKey, {
+        what: "",
+        resultsPerPage: 1,
+        page: 1,
+      });
+
+      return {
+        code: country.code,
+        name: country.name,
+        count: data?.count ?? 0,
+      };
+    })
+  );
+
+  return results.filter((country) => country.count > 0);
+}
+
+export async function getAdzunaJobSamples(
+  countryCode: string,
+  {
+    where,
+    maxJobs = 150,
+    maxPages = 3,
+  }: {
+    where?: string;
+    maxJobs?: number;
+    maxPages?: number;
+  } = {}
+) {
+  const credentials = getAdzunaCredentials();
+
+  if (!credentials) {
+    return [];
+  }
+
+  const { appId, appKey } = credentials;
+  const adzunaCountryCode = getAdzunaCountryCode(countryCode);
+  const resultsPerPage = 50;
+  const jobs: Job[] = [];
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const data = await fetchAdzunaPage(adzunaCountryCode, appId, appKey, {
+      what: "",
+      where,
+      resultsPerPage,
+      page,
+    });
+
+    if (!data || data.results.length === 0) {
+      break;
+    }
+
+    jobs.push(...data.results.map(normalizeAdzunaJob));
+
+    if (jobs.length >= data.count || jobs.length >= maxJobs) {
+      break;
+    }
+  }
+
+  return jobs.slice(0, maxJobs);
+}
+
+export async function getAdzunaJobCount(countryCode: string, where?: string) {
+  const credentials = getAdzunaCredentials();
+
+  if (!credentials) {
+    return 0;
+  }
+
+  const { appId, appKey } = credentials;
+  const adzunaCountryCode = getAdzunaCountryCode(countryCode);
+
+  const data = await fetchAdzunaPage(adzunaCountryCode, appId, appKey, {
+    what: "",
+    where,
+    resultsPerPage: 1,
+    page: 1,
+  });
+
+  return data?.count ?? 0;
 }
