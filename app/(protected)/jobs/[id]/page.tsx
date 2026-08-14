@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 
 import {
+  formatPostedAt,
   formatSalary,
   getRiskColor,
   getWorkModeColor,
@@ -259,7 +260,7 @@ export default function JobDetailPage() {
                 <div>
                   <p className="text-slate-500">Posted</p>
                   <p className="font-semibold text-slate-950">
-                    {job.postedAt}
+                    {formatPostedAt(job.postedAt)}
                   </p>
                 </div>
               </div>

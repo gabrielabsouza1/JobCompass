@@ -457,3 +457,80 @@ export function parseWorkRightsFilter(value: string) {
 export function serializeWorkRightsFilter(workRights: string[]) {
   return serializeMultiFilter(workRights, ALL_WORK_RIGHTS_VALUES);
 }
+
+export function jobMatchesEmploymentTypeFilter(
+  job: Job,
+  employmentType?: string | null
+) {
+  const employmentFilters = parseEmploymentTypeFilter(employmentType ?? "");
+
+  if (employmentFilters.length === 0) {
+    return true;
+  }
+
+  const jobEmployment = jobEmploymentTypeToFilterValue(job.employmentType);
+
+  return (
+    employmentFilters.includes(jobEmployment) || jobEmployment === "not_listed"
+  );
+}
+
+export function jobMatchesSearchFilters(
+  job: Job,
+  options: {
+    selectedSourceIds: string[];
+    source?: string | null;
+    workMode?: string | null;
+    employmentType?: string | null;
+    workRights?: string | null;
+  }
+) {
+  const passesSource = options.selectedSourceIds.some((sourceId) =>
+    job.source.toLowerCase().includes(sourceId.toLowerCase())
+  );
+
+  if (!passesSource) {
+    return false;
+  }
+
+  if (options.source && options.source !== "any") {
+    if (job.source.toLowerCase() !== options.source.toLowerCase()) {
+      return false;
+    }
+  }
+
+  const workModeFilters = parseWorkModeFilter(options.workMode ?? "");
+  const matchesWorkMode =
+    workModeFilters.length === 0 ||
+    workModeFilters.includes(job.workMode.toLowerCase());
+
+  if (!matchesWorkMode) {
+    return false;
+  }
+
+  if (!jobMatchesEmploymentTypeFilter(job, options.employmentType)) {
+    return false;
+  }
+
+  const workRightsFilters = parseWorkRightsFilter(options.workRights ?? "");
+  const matchesWorkRights =
+    workRightsFilters.length === 0 ||
+    workRightsFilters.some((workRight) =>
+      isJobCompatibleWithWorkRight(job, workRight)
+    );
+
+  return matchesWorkRights;
+}
+
+export function hasRestrictiveMultiSelection(
+  selected: string[],
+  allValues: readonly string[]
+) {
+  if (selected.length === 0) {
+    return false;
+  }
+
+  const normalized = selected.map((value) => value.toLowerCase());
+
+  return !allValues.every((value) => normalized.includes(value.toLowerCase()));
+}

@@ -72,7 +72,7 @@ function buildSearchUrl(filters: UseJobsFilters) {
     params.set("workRights", filters.workRights);
   }
 
-  if (filters.targetRoles) {
+  if (filters.targetRoles !== undefined) {
     params.set("targetRoles", filters.targetRoles);
   }
 

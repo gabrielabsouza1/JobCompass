@@ -6,6 +6,7 @@ import {
   MapPin,
 } from "lucide-react";
 import {
+  formatPostedAt,
   formatSalary,
   getRiskColor,
   getWorkModeColor,
@@ -95,7 +96,7 @@ export function JobCard({ job, isSaved, onToggleSave }: JobCardProps) {
                 {formatSalary(job.salaryMin, job.salaryMax)}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Posted {job.postedAt}
+                Posted {formatPostedAt(job.postedAt)}
               </p>
             </div>
 

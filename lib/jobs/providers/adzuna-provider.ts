@@ -134,7 +134,7 @@ function normalizeAdzunaJob(job: AdzunaJob): Job {
     salaryMin: job.salary_min,
     salaryMax: job.salary_max,
     currency: "AUD",
-    postedAt: new Date(job.created).toLocaleDateString("en-AU"),
+    postedAt: job.created,
     matchScore: 0,
     skills: [],
     description: job.description,
