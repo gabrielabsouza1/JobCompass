@@ -1,7 +1,10 @@
 import type { Job } from "@/types";
 
 import { getPostedAtValue } from "@/lib/job-utils";
-import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
+import {
+  calculateMatchScore,
+  getJobSkillMatchDetails,
+} from "@/lib/jobs/calculate-match-score";
 import { jobMatchesSearchFilters } from "@/lib/jobs/extract-filter-options";
 import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
 
@@ -24,6 +27,7 @@ type JobSearchFilterOptions = {
   workMode?: string | null;
   employmentType?: string | null;
   workRights?: string | null;
+  skills?: string[];
 };
 
 type FetchAdzunaBatch = (
@@ -108,10 +112,16 @@ export async function buildFilteredJobPage(
 
     const filtered = jobs
       .filter((job) => jobMatchesSearchFilters(job, filterOptions))
-      .map((job) => ({
-        ...job,
-        matchScore: calculateMatchScore(job, profileContext),
-      }));
+      .map((job) => {
+        const skillMatch = getJobSkillMatchDetails(job, profileContext);
+
+        return {
+          ...job,
+          matchScore: calculateMatchScore(job, profileContext),
+          matchedProfileSkills: skillMatch.matchedSkills,
+          missingProfileSkills: skillMatch.missingSkills,
+        };
+      });
 
     for (const job of filtered) {
       if (seenJobIds.has(job.id)) {

@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { suggestNextSkill } from "@/data/skill-suggestions";
+import { calculateProfileCompletion } from "@/lib/profile/calculate-profile-completion";
 import {
   normalizeSkill,
   uniqueSkills,
@@ -101,6 +102,15 @@ export default function ProfilePage() {
   const suggestedNextSkillText = nextSkillSuggestion
     ? `Add ${nextSkillSuggestion} to improve matches for roles that mention it in job descriptions.`
     : "You have covered the starter skill suggestions. Keep adding skills from your experience.";
+  const profileCompletion = calculateProfileCompletion({
+    countryName: user?.countryName,
+    cityName: user?.cityName,
+    workMode: user?.workMode,
+    employmentType: user?.employmentType,
+    workRights: user?.workRights,
+    targetRoles: user?.targetRoles,
+    skills: user?.skills,
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -514,7 +524,7 @@ export default function ProfilePage() {
                       Profile completion
                     </p>
                     <p className="mt-1 text-5xl font-bold text-teal-700">
-                      82%
+                      {profileCompletion}%
                     </p>
                   </div>
                 </div>

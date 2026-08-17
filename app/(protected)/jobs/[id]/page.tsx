@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   Bookmark,
@@ -19,22 +20,86 @@ import {
   getRiskColor,
   getWorkModeColor,
 } from "@/lib/job-utils";
+import { getCachedJob } from "@/lib/jobs/job-session-cache";
 import { AppShell } from "@/components/layout/app-shell";
-import { mockJobs } from "@/data/mock-data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
-import { useState } from "react";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
+import type { Job } from "@/types";
 
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
   const { toastMessage, showToast } = useToast();
+  const { user } = useCurrentUser();
+  const [job, setJob] = useState<Job | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
-  const job = mockJobs.find((item) => item.id === params.id);
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const jobId = params.id;
+
+    async function loadJob() {
+      setIsLoading(true);
+      setLoadError("");
+
+      const cachedJob = getCachedJob(jobId);
+
+      if (cachedJob) {
+        if (isMounted) {
+          setJob(cachedJob);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error("Job not found");
+        }
+
+        const data = (await response.json()) as { job?: Job };
+
+        if (!isMounted) {
+          return;
+        }
+
+        setJob(data.job ?? null);
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error(error);
+
+        if (isMounted) {
+          setJob(null);
+          setLoadError("This job is no longer available.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadJob();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [params.id]);
 
   function handleToggleSavedJob(jobId: string) {
     const wasSaved = isJobSaved(jobId);
@@ -42,6 +107,16 @@ export default function JobDetailPage() {
     toggleSavedJob(jobId);
 
     showToast(wasSaved ? "Job removed from saved" : "Job saved");
+  }
+
+  if (isLoading) {
+    return (
+      <AppShell>
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-sm">
+          <p className="text-sm font-semibold text-slate-600">Loading job...</p>
+        </div>
+      </AppShell>
+    );
   }
 
   if (!job) {
@@ -52,7 +127,7 @@ export default function JobDetailPage() {
             Job not found
           </h1>
           <p className="mt-2 text-slate-600">
-            This job does not exist or is no longer available.
+            {loadError || "This job does not exist or is no longer available."}
           </p>
 
           <Link
@@ -65,6 +140,9 @@ export default function JobDetailPage() {
       </AppShell>
     );
   }
+
+  const matchedSkills = job.matchedProfileSkills ?? [];
+  const missingSkills = job.missingProfileSkills ?? [];
 
   return (
     <AppShell>
@@ -89,6 +167,10 @@ export default function JobDetailPage() {
                   </div>
 
                   <div className="mb-3 flex flex-wrap gap-2">
+                    <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                      {job.matchScore}% match
+                    </Badge>
+
                     <Badge
                       className={`rounded-full hover:bg-current ${getWorkModeColor(
                         job.workMode
@@ -132,47 +214,26 @@ export default function JobDetailPage() {
                   </div>
                 </div>
 
-                <div className="rounded-3xl bg-teal-50 p-5 text-center">
-                  <p className="text-sm font-medium text-slate-500">
-                    Match score
-                  </p>
-                  <p className="mt-1 text-5xl font-bold text-teal-700">
-                    {job.matchScore}%
-                  </p>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Good match for your profile
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <Button
-                  onClick={() => handleToggleSavedJob(job.id)}
-                  className={`h-12 rounded-2xl px-6 ${isJobSaved(job.id)
-                    ? "bg-teal-700 hover:bg-teal-800"
-                    : "bg-teal-600 hover:bg-teal-700"
-                    }`}
-                >
-                  <Bookmark
-                    className="mr-2 h-5 w-5"
-                    fill={isJobSaved(job.id) ? "currentColor" : "none"}
-                  />
-                  {isJobSaved(job.id) ? "Saved job" : "Save job"}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  className="h-12 rounded-2xl border-slate-200 px-6"
-                >
-                  <a
-                    href={job.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
+                  <Button
+                    type="button"
+                    onClick={() => handleToggleSavedJob(job.id)}
+                    className="h-11 rounded-2xl bg-teal-600 hover:bg-teal-700"
                   >
-                    <ExternalLink className="mr-2 h-5 w-5" />
-                    Apply on original site
-                  </a>
-                </Button>
+                    <Bookmark className="mr-2 h-4 w-4" />
+                    {isJobSaved(job.id) ? "Saved" : "Save job"}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-2xl border-slate-200"
+                    onClick={() => window.open(job.url, "_blank", "noopener,noreferrer")}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open original
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -186,20 +247,6 @@ export default function JobDetailPage() {
               <p className="mt-4 leading-7 text-slate-600">
                 {job.description}
               </p>
-
-              <div className="mt-6 rounded-3xl bg-slate-50 p-5">
-                <h3 className="font-semibold text-slate-950">
-                  What you might do
-                </h3>
-
-                <ul className="mt-3 space-y-2 text-sm text-slate-600">
-                  <li>• Review requirements and create test scenarios.</li>
-                  <li>• Execute manual tests and document results.</li>
-                  <li>• Report bugs clearly using issue tracking tools.</li>
-                  <li>• Collaborate with developers and product teams.</li>
-                  <li>• Help improve product quality before release.</li>
-                </ul>
-              </div>
             </CardContent>
           </Card>
 
@@ -210,20 +257,74 @@ export default function JobDetailPage() {
               </h2>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                {job.skills.map((skill) => (
-                  <Badge
-                    key={skill}
-                    className="rounded-full bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-100"
-                  >
-                    {skill}
-                  </Badge>
-                ))}
+                {job.skills.length > 0 ? (
+                  job.skills.map((skill) => (
+                    <Badge
+                      key={skill}
+                      className="rounded-full bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-100"
+                    >
+                      {skill}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No catalog skills detected in this listing yet.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
         </main>
 
         <aside className="space-y-4">
+          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+            <CardContent className="p-5">
+              <h2 className="font-bold text-slate-950">Your skill match</h2>
+
+              <p className="mt-2 text-sm text-slate-600">
+                {user?.skills?.length
+                  ? `${matchedSkills.length} of ${user.skills.length} profile skills appear in this job.`
+                  : "Add skills to your profile to see personalized matches."}
+              </p>
+
+              {matchedSkills.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    You have
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {matchedSkills.map((skill) => (
+                      <Badge
+                        key={skill}
+                        className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 hover:bg-emerald-50"
+                      >
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {missingSkills.length > 0 ? (
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Not mentioned
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {missingSkills.slice(0, 6).map((skill) => (
+                      <Badge
+                        key={skill}
+                        className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 hover:bg-slate-100"
+                      >
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
             <CardContent className="p-5">
               <h2 className="font-bold text-slate-950">Job overview</h2>

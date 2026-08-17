@@ -35,6 +35,8 @@ type JobsFiltersPanelProps = {
   selectedWorkRights: string[];
   targetRoleOptions: string[];
   selectedTargetRoles: string[];
+  skillOptions: string[];
+  selectedSkills: string[];
   sourceFilter: string;
   filterOptions: JobsFilterOptions | null;
   disabled?: boolean;
@@ -46,6 +48,7 @@ type JobsFiltersPanelProps = {
   onToggleWorkRights: (workRight: string) => void;
   onToggleTargetRole: (role: string) => void;
   onAddTargetRole: (role: string) => void;
+  onToggleSkill: (skill: string) => void;
   onSourceChange: (value: string) => void;
   onReset: () => void;
 };
@@ -145,6 +148,8 @@ export function JobsFiltersPanel({
   selectedWorkRights,
   targetRoleOptions,
   selectedTargetRoles,
+  skillOptions,
+  selectedSkills,
   sourceFilter,
   filterOptions,
   disabled,
@@ -156,6 +161,7 @@ export function JobsFiltersPanel({
   onToggleWorkRights,
   onToggleTargetRole,
   onAddTargetRole,
+  onToggleSkill,
   onSourceChange,
   onReset,
 }: JobsFiltersPanelProps) {
@@ -521,6 +527,26 @@ export function JobsFiltersPanel({
                   ))}
                 </div>
               </div>
+
+              {skillOptions.length > 0 ? (
+                <div className="border-t border-slate-100 pt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Your skills
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {skillOptions.map((skill) => (
+                      <TogglePill
+                        key={skill}
+                        label={skill}
+                        active={selectedSkills.includes(skill)}
+                        onClick={() => onToggleSkill(skill)}
+                        disabled={disabled}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
 
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">

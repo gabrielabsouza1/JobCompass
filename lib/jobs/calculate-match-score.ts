@@ -1,5 +1,7 @@
 import type { Job } from "@/types";
 
+import { getProfileSkillMatch } from "@/lib/skills/match-profile-skills";
+
 type UserMatchProfile = {
   cityName?: string;
   stateName?: string;
@@ -99,30 +101,6 @@ function calculateEmploymentScore(job: Job, profile: UserMatchProfile) {
   return 0;
 }
 
-function calculateSkillsScore(job: Job, profile: UserMatchProfile) {
-  const profileSkills = (profile.skills ?? [])
-    .map((skill) => normalizeText(skill))
-    .filter(Boolean);
-
-  if (profileSkills.length === 0) {
-    return 0;
-  }
-
-  const searchableText = normalizeText(
-    `${job.title} ${job.description} ${job.skills.join(" ")}`
-  );
-
-  const matchedSkills = profileSkills.filter((skill) => {
-    if (searchableText.includes(skill)) {
-      return true;
-    }
-
-    return skill.split(/\s+/).some((word) => word.length > 2 && searchableText.includes(word));
-  });
-
-  return Math.min(matchedSkills.length * 4, 20);
-}
-
 function calculateWorkRightsScore(job: Job, profile: UserMatchProfile) {
   const workRights = normalizeText(profile.workRights);
 
@@ -148,11 +126,15 @@ function calculateWorkRightsScore(job: Job, profile: UserMatchProfile) {
   return 0;
 }
 
+export function getJobSkillMatchDetails(job: Job, profile: UserMatchProfile) {
+  return getProfileSkillMatch(profile.skills ?? [], job);
+}
+
 export function calculateMatchScore(job: Job, profile: UserMatchProfile) {
   const locationScore = calculateLocationScore(job, profile);
   const workModeScore = calculateWorkModeScore(job, profile);
   const employmentScore = calculateEmploymentScore(job, profile);
-  const skillsScore = calculateSkillsScore(job, profile);
+  const { skillsScore } = getJobSkillMatchDetails(job, profile);
   const workRightsScore = calculateWorkRightsScore(job, profile);
 
   const totalScore =

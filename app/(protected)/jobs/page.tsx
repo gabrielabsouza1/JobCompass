@@ -17,6 +17,11 @@ import {
   targetRolesFromProfileValue,
   uniqueTargetRoles,
 } from "@/lib/profile/target-roles";
+import {
+  serializeSkillsFilter,
+  uniqueSkills,
+} from "@/lib/profile/skills";
+import { cacheJobs } from "@/lib/jobs/job-session-cache";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +57,7 @@ export default function JobsPage() {
   const [selectedWorkRights, setSelectedWorkRights] = useState<string[]>([]);
   const [targetRoleOptions, setTargetRoleOptions] = useState<string[]>([]);
   const [selectedTargetRoles, setSelectedTargetRoles] = useState<string[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [filtersReady, setFiltersReady] = useState(false);
   const jobsTopRef = useRef<HTMLElement>(null);
   const pendingScrollToTopRef = useRef(false);
@@ -75,6 +81,10 @@ export default function JobsPage() {
     employmentType: serializeEmploymentTypeFilter(selectedEmploymentTypes),
     workRights: serializeWorkRightsFilter(selectedWorkRights),
     targetRoles: serializeTargetRolesFilter(selectedTargetRoles),
+    skills:
+      selectedSkills.length > 0
+        ? serializeSkillsFilter(selectedSkills)
+        : undefined,
     source: sourceFilter !== "any" ? sourceFilter : undefined,
     sort: sortBy === "date_posted" ? "date_posted" : undefined,
     enabled: filtersReady,
@@ -108,6 +118,12 @@ export default function JobsPage() {
   }, [user]);
 
   useEffect(() => {
+    if (jobs.length > 0) {
+      cacheJobs(jobs);
+    }
+  }, [jobs]);
+
+  useEffect(() => {
     const timer = setTimeout(() => setSearchQuery(searchInput), 400);
 
     return () => clearTimeout(timer);
@@ -124,6 +140,7 @@ export default function JobsPage() {
     selectedEmploymentTypes,
     selectedWorkRights,
     selectedTargetRoles,
+    selectedSkills,
     sourceFilter,
     sortBy,
   ]);
@@ -196,6 +213,7 @@ export default function JobsPage() {
     setSelectedWorkModes([]);
     setSelectedEmploymentTypes([]);
     setSelectedTargetRoles([]);
+    setSelectedSkills([]);
     setTargetRoleOptions(targetRolesFromProfileValue(user?.targetRoles));
     setSortBy("best_match");
     setCurrentPage(1);
@@ -268,6 +286,16 @@ export default function JobsPage() {
     });
   }
 
+  function handleToggleSkill(skill: string) {
+    setSelectedSkills((current) => {
+      if (current.includes(skill)) {
+        return current.filter((item) => item !== skill);
+      }
+
+      return uniqueSkills([...current, skill]);
+    });
+  }
+
   function handleAddTargetRole(role: string) {
     const normalized = role.trim();
 
@@ -333,6 +361,8 @@ export default function JobsPage() {
         selectedWorkRights={selectedWorkRights}
         targetRoleOptions={targetRoleOptions}
         selectedTargetRoles={selectedTargetRoles}
+        skillOptions={user?.skills ?? []}
+        selectedSkills={selectedSkills}
         sourceFilter={sourceFilter}
         filterOptions={filterOptions}
         disabled={!filtersReady}
@@ -344,6 +374,7 @@ export default function JobsPage() {
         onToggleWorkRights={handleToggleWorkRights}
         onToggleTargetRole={handleToggleTargetRole}
         onAddTargetRole={handleAddTargetRole}
+        onToggleSkill={handleToggleSkill}
         onSourceChange={setSourceFilter}
         onReset={resetFilters}
       />
@@ -426,23 +457,28 @@ export default function JobsPage() {
 
               <div className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Skills & experience</span>
-                  <span className="font-semibold text-slate-950">45%</span>
+                  <span className="text-slate-500">Base relevance</span>
+                  <span className="font-semibold text-slate-950">30 pts</span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Job preferences</span>
-                  <span className="font-semibold text-slate-950">30%</span>
+                  <span className="text-slate-500">Location</span>
+                  <span className="font-semibold text-slate-950">up to 25</span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Location & work type</span>
-                  <span className="font-semibold text-slate-950">15%</span>
+                  <span className="text-slate-500">Work mode</span>
+                  <span className="font-semibold text-slate-950">up to 20</span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Recency</span>
-                  <span className="font-semibold text-slate-950">10%</span>
+                  <span className="text-slate-500">Skills match</span>
+                  <span className="font-semibold text-slate-950">up to 20</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Employment + work rights</span>
+                  <span className="font-semibold text-slate-950">up to 25</span>
                 </div>
               </div>
             </CardContent>
@@ -488,9 +524,12 @@ export default function JobsPage() {
                 accurate job recommendations.
               </p>
 
-              <Button className="mt-4 h-10 rounded-xl bg-teal-600 hover:bg-teal-700">
+              <Link
+                href="/profile"
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white transition hover:bg-teal-700"
+              >
                 Complete profile
-              </Button>
+              </Link>
             </CardContent>
           </Card>
         </aside>

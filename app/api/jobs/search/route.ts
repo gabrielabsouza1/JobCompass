@@ -11,7 +11,9 @@ import {
 } from "@/lib/jobs/extract-filter-options";
 import { buildFilteredJobPage } from "@/lib/jobs/filtered-job-catalog";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
-import { parseSkillsFromProfile } from "@/lib/profile/skills";
+import {
+  parseSkillsFromProfile,
+} from "@/lib/profile/skills";
 import { targetRolesFromProfileValue } from "@/lib/profile/target-roles";
 import {
   getAdzunaCodeFromCountryName,
@@ -88,6 +90,7 @@ export async function GET(request: NextRequest) {
   const employmentType = searchParams.get("employmentType");
   const workRights = searchParams.get("workRights");
   const targetRolesParam = searchParams.get("targetRoles");
+  const skillsParam = searchParams.get("skills");
   const source = searchParams.get("source");
   const sortParam = searchParams.get("sort");
   const sortBy =
@@ -214,6 +217,14 @@ export async function GET(request: NextRequest) {
         .filter(Boolean)
     : profileTargetRoles;
 
+  const hasSkillsParam = searchParams.has("skills");
+  const activeSkills = hasSkillsParam
+    ? (skillsParam ?? "")
+        .split("|")
+        .map((skill) => skill.trim())
+        .filter(Boolean)
+    : [];
+
   const adzunaSearchFilters = {
     query,
     targetRoles: activeTargetRoles,
@@ -229,6 +240,7 @@ export async function GET(request: NextRequest) {
     workMode,
     employmentType,
     workRights,
+    skills: activeSkills,
   };
 
   const profileMatchContext = {

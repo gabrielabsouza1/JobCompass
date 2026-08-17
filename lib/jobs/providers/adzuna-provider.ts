@@ -1,5 +1,6 @@
 import type { Job } from "@/types";
 import { normalizeJob } from "@/lib/jobs/job-normalizer";
+import { extractJobSkills } from "@/lib/jobs/extract-job-skills";
 import { normalizeAdzunaStaticUrl } from "@/lib/jobs/extract-adzuna-logo";
 import {
   ADZUNA_COUNTRIES,
@@ -117,9 +118,12 @@ function getCompanyLogoUrl(job: AdzunaJob): string | undefined {
 }
 
 function normalizeAdzunaJob(job: AdzunaJob): Job {
+  const description = job.description;
+  const title = job.title;
+
   return normalizeJob({
     id: `adzuna-${job.id}`,
-    title: job.title,
+    title,
     company: job.company?.display_name ?? "Company not listed",
     source: "Adzuna",
     sourceType: "api",
@@ -127,7 +131,7 @@ function normalizeAdzunaJob(job: AdzunaJob): Job {
     country: getCountryFromArea(job.location?.area),
     state: getStateFromArea(job.location?.area),
     city: getCityFromArea(job.location?.area),
-    workMode: job.description.toLowerCase().includes("remote")
+    workMode: description.toLowerCase().includes("remote")
       ? "Remote"
       : "Onsite",
     employmentType: getEmploymentType(job.contract_time),
@@ -136,8 +140,8 @@ function normalizeAdzunaJob(job: AdzunaJob): Job {
     currency: "AUD",
     postedAt: job.created,
     matchScore: 0,
-    skills: [],
-    description: job.description,
+    skills: extractJobSkills(title, description),
+    description,
     url: job.redirect_url,
     workRightsRisk: "Low",
     companyLogoUrl: getCompanyLogoUrl(job),
@@ -335,4 +339,39 @@ export async function getAdzunaJobCount(countryCode: string, where?: string) {
   });
 
   return data?.count ?? 0;
+}
+
+export async function getAdzunaJobById(jobId: string, countryCode = "AU") {
+  const credentials = getAdzunaCredentials();
+
+  if (!credentials) {
+    return null;
+  }
+
+  const adzunaId = jobId.startsWith("adzuna-")
+    ? jobId.replace("adzuna-", "")
+    : jobId;
+  const adzunaCountryCode = getAdzunaCountryCode(countryCode);
+  const { appId, appKey } = credentials;
+  const url = new URL(
+    `https://api.adzuna.com/v1/api/jobs/${adzunaCountryCode}/view/${adzunaId}`
+  );
+
+  url.searchParams.set("app_id", appId);
+  url.searchParams.set("app_key", appKey);
+
+  const response = await fetch(url.toString(), {
+    next: {
+      revalidate: 300,
+    },
+  });
+
+  if (!response.ok) {
+    console.error("Adzuna job view error", response.status, jobId);
+    return null;
+  }
+
+  const job = (await response.json()) as AdzunaJob;
+
+  return normalizeAdzunaJob(job);
 }

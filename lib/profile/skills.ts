@@ -43,3 +43,11 @@ export function parseSkillsFromProfile(value: unknown) {
 
   return [];
 }
+
+export function serializeSkillsFilter(skills: string[]) {
+  return uniqueSkills(skills).join("|");
+}
+
+export function skillsFromProfileValue(value?: string[] | null) {
+  return parseSkillsFromProfile(value);
+}
