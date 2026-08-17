@@ -44,22 +44,30 @@ export function SkillAutocompleteInput({
     );
 
     async function loadSuggestions() {
-      const response = await fetch(
-        `/api/skills/suggest?q=${encodeURIComponent(value)}`,
-        { signal: controller.signal }
-      );
+      try {
+        const response = await fetch(
+          `/api/skills/suggest?q=${encodeURIComponent(value)}`,
+          { signal: controller.signal }
+        );
 
-      if (!response.ok || !isMounted) {
-        return;
+        if (!response.ok || !isMounted) {
+          return;
+        }
+
+        const data = (await response.json()) as { suggestions?: string[] };
+
+        setSuggestions(
+          (data.suggestions ?? []).filter(
+            (skill) => !blockedSkills.has(skill.toLowerCase())
+          )
+        );
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error(error);
       }
-
-      const data = (await response.json()) as { suggestions?: string[] };
-
-      setSuggestions(
-        (data.suggestions ?? []).filter(
-          (skill) => !blockedSkills.has(skill.toLowerCase())
-        )
-      );
     }
 
     void loadSuggestions();
@@ -83,22 +91,30 @@ export function SkillAutocompleteInput({
         return;
       }
 
-      const response = await fetch(
-        `/api/skills/esco-search?q=${encodeURIComponent(value)}`,
-        { signal: controller.signal }
-      );
+      try {
+        const response = await fetch(
+          `/api/skills/esco-search?q=${encodeURIComponent(value)}`,
+          { signal: controller.signal }
+        );
 
-      if (!response.ok || !isMounted) {
-        return;
+        if (!response.ok || !isMounted) {
+          return;
+        }
+
+        const data = (await response.json()) as { results?: EscoSuggestion[] };
+
+        setEscoSuggestions(
+          (data.results ?? []).filter(
+            (result) => !blockedSkills.has(result.name.toLowerCase())
+          )
+        );
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error(error);
       }
-
-      const data = (await response.json()) as { results?: EscoSuggestion[] };
-
-      setEscoSuggestions(
-        (data.results ?? []).filter(
-          (result) => !blockedSkills.has(result.name.toLowerCase())
-        )
-      );
     }
 
     void loadEscoSuggestions();

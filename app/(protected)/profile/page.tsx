@@ -108,23 +108,31 @@ export default function ProfilePage() {
     const exclude = displayedSkillsKey;
 
     async function loadNextSkillSuggestion() {
-      const response = await fetch(
-        `/api/skills/suggest?q=&exclude=${encodeURIComponent(exclude)}&limit=1`,
-        { signal: controller.signal }
-      );
+      try {
+        const response = await fetch(
+          `/api/skills/suggest?q=&exclude=${encodeURIComponent(exclude)}&limit=1`,
+          { signal: controller.signal }
+        );
 
-      if (!response.ok || !isMounted) {
-        return;
-      }
+        if (!response.ok || !isMounted) {
+          return;
+        }
 
-      const data = (await response.json()) as { suggestions?: string[] };
-      const fallback = suggestNextSkill(
-        displayedSkillsKey ? displayedSkillsKey.split("|") : []
-      );
-      const suggestion = data.suggestions?.[0] ?? fallback;
+        const data = (await response.json()) as { suggestions?: string[] };
+        const fallback = suggestNextSkill(
+          displayedSkillsKey ? displayedSkillsKey.split("|") : []
+        );
+        const suggestion = data.suggestions?.[0] ?? fallback;
 
-      if (isMounted) {
-        setNextSkillSuggestion(suggestion);
+        if (isMounted) {
+          setNextSkillSuggestion(suggestion);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error(error);
       }
     }
 
