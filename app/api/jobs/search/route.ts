@@ -11,6 +11,7 @@ import {
 } from "@/lib/jobs/extract-filter-options";
 import { buildFilteredJobPage } from "@/lib/jobs/filtered-job-catalog";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
+import { parseSkillsFromProfile } from "@/lib/profile/skills";
 import { targetRolesFromProfileValue } from "@/lib/profile/target-roles";
 import {
   getAdzunaCodeFromCountryName,
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
+      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills"
     )
     .eq("id", user.id)
     .single();
@@ -112,15 +113,15 @@ export async function GET(request: NextRequest) {
   let resolvedProfile = profile;
 
   if (profileError) {
-    const missingTargetRolesColumn =
-      profileError.message?.includes("target_roles") ||
-      profileError.details?.includes("target_roles");
+    const missingSkillsColumn =
+      profileError.message?.includes("skills") ||
+      profileError.details?.includes("skills");
 
-    if (missingTargetRolesColumn) {
+    if (missingSkillsColumn) {
       const { data: fallbackProfile, error: fallbackError } = await supabase
         .from("profiles")
         .select(
-          "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
+          "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
         )
         .eq("id", user.id)
         .single();
@@ -136,15 +137,43 @@ export async function GET(request: NextRequest) {
 
       resolvedProfile = {
         ...fallbackProfile,
-        target_roles: [],
+        skills: [],
       };
     } else {
-      console.error(profileError);
+      const missingTargetRolesColumn =
+        profileError.message?.includes("target_roles") ||
+        profileError.details?.includes("target_roles");
 
-      return NextResponse.json(
-        { error: "Could not load user profile" },
-        { status: 500 }
-      );
+      if (missingTargetRolesColumn) {
+        const { data: fallbackProfile, error: fallbackError } = await supabase
+          .from("profiles")
+          .select(
+            "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, skills"
+          )
+          .eq("id", user.id)
+          .single();
+
+        if (fallbackError) {
+          console.error(fallbackError);
+
+          return NextResponse.json(
+            { error: "Could not load user profile" },
+            { status: 500 }
+          );
+        }
+
+        resolvedProfile = {
+          ...fallbackProfile,
+          target_roles: [],
+        };
+      } else {
+        console.error(profileError);
+
+        return NextResponse.json(
+          { error: "Could not load user profile" },
+          { status: 500 }
+        );
+      }
     }
   }
 
@@ -209,6 +238,7 @@ export async function GET(request: NextRequest) {
     workMode: resolvedProfile.work_mode ?? "",
     employmentType: resolvedProfile.employment_type ?? "",
     workRights: resolvedProfile.work_rights ?? "",
+    skills: parseSkillsFromProfile(resolvedProfile.skills),
   };
 
   const catalogPage = await buildFilteredJobPage(

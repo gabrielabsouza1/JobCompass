@@ -15,6 +15,7 @@ type ProfileMatchContext = {
   workMode: string;
   employmentType: string;
   workRights: string;
+  skills: string[];
 };
 
 type JobSearchFilterOptions = {

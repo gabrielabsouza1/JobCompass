@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
+import { parseSkillsFromProfile, uniqueSkills } from "@/lib/profile/skills";
 import { parseTargetRolesFromProfile, uniqueTargetRoles } from "@/lib/profile/target-roles";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,9 +16,13 @@ type ProfileUpdateBody = {
   employmentType?: string;
   workRights?: string;
   targetRoles?: string[];
+  skills?: string[];
 };
 
-const PROFILE_SELECT_WITH_TARGET_ROLES =
+const PROFILE_SELECT_FULL =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills";
+
+const PROFILE_SELECT_WITHOUT_SKILLS =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles";
 
 const PROFILE_SELECT_WITHOUT_TARGET_ROLES =
@@ -68,6 +73,10 @@ function buildProfileUpdate(body: ProfileUpdateBody) {
     update.target_roles = uniqueTargetRoles(body.targetRoles);
   }
 
+  if (body.skills !== undefined) {
+    update.skills = uniqueSkills(body.skills);
+  }
+
   return update;
 }
 
@@ -87,7 +96,14 @@ function mapProfileRow(
     employmentType: (profile?.employment_type as string | undefined) ?? "",
     workRights: (profile?.work_rights as string | undefined) ?? "",
     targetRoles: parseTargetRolesFromProfile(profile?.target_roles),
+    skills: parseSkillsFromProfile(profile?.skills),
   };
+}
+
+function isMissingColumnError(error: { message?: string; details?: string }, column: string) {
+  return (
+    error.message?.includes(column) || error.details?.includes(column)
+  );
 }
 
 async function loadProfileForUser(userId: string, authEmail: string) {
@@ -95,7 +111,7 @@ async function loadProfileForUser(userId: string, authEmail: string) {
 
   const { data: profile, error } = await supabase
     .from("profiles")
-    .select(PROFILE_SELECT_WITH_TARGET_ROLES)
+    .select(PROFILE_SELECT_FULL)
     .eq("id", userId)
     .maybeSingle();
 
@@ -103,31 +119,48 @@ async function loadProfileForUser(userId: string, authEmail: string) {
     return mapProfileRow(profile, authEmail);
   }
 
-  const missingTargetRolesColumn =
-    error.message?.includes("target_roles") ||
-    error.details?.includes("target_roles");
+  if (isMissingColumnError(error, "skills")) {
+    const { data: fallbackProfile, error: fallbackError } = await supabase
+      .from("profiles")
+      .select(PROFILE_SELECT_WITHOUT_SKILLS)
+      .eq("id", userId)
+      .maybeSingle();
 
-  if (!missingTargetRolesColumn) {
-    throw error;
+    if (fallbackError) {
+      throw fallbackError;
+    }
+
+    return mapProfileRow(
+      {
+        ...fallbackProfile,
+        skills: [],
+      },
+      authEmail
+    );
   }
 
-  const { data: fallbackProfile, error: fallbackError } = await supabase
-    .from("profiles")
-    .select(PROFILE_SELECT_WITHOUT_TARGET_ROLES)
-    .eq("id", userId)
-    .maybeSingle();
+  if (isMissingColumnError(error, "target_roles")) {
+    const { data: fallbackProfile, error: fallbackError } = await supabase
+      .from("profiles")
+      .select(PROFILE_SELECT_WITHOUT_TARGET_ROLES)
+      .eq("id", userId)
+      .maybeSingle();
 
-  if (fallbackError) {
-    throw fallbackError;
+    if (fallbackError) {
+      throw fallbackError;
+    }
+
+    return mapProfileRow(
+      {
+        ...fallbackProfile,
+        target_roles: [],
+        skills: [],
+      },
+      authEmail
+    );
   }
 
-  return mapProfileRow(
-    {
-      ...fallbackProfile,
-      target_roles: [],
-    },
-    authEmail
-  );
+  throw error;
 }
 
 export async function GET() {
@@ -178,13 +211,36 @@ export async function PATCH(request: NextRequest) {
     .from("profiles")
     .update(updatePayload)
     .eq("id", user.id)
-    .select(PROFILE_SELECT_WITH_TARGET_ROLES)
+    .select(PROFILE_SELECT_FULL)
     .maybeSingle();
 
   if (updateError) {
-    const missingTargetRolesColumn =
-      updateError.message?.includes("target_roles") ||
-      updateError.details?.includes("target_roles");
+    const missingSkillsColumn = isMissingColumnError(updateError, "skills");
+
+    if (missingSkillsColumn && updatePayload.skills) {
+      const { skills: skillsPayload, ...rest } = updatePayload;
+
+      if (Object.keys(rest).length > 0) {
+        const { error: partialError } = await supabase
+          .from("profiles")
+          .update(rest)
+          .eq("id", user.id);
+
+        if (partialError) {
+          console.error(partialError);
+
+          return NextResponse.json({ error: partialError.message }, { status: 500 });
+        }
+      }
+
+      return NextResponse.json({
+        error:
+          "The skills column is missing. Run the skills migration in Supabase.",
+        savedSkills: false,
+      }, { status: 400 });
+    }
+
+    const missingTargetRolesColumn = isMissingColumnError(updateError, "target_roles");
 
     if (missingTargetRolesColumn && updatePayload.target_roles) {
       const { target_roles: targetRoles, ...rest } = updatePayload;
@@ -253,7 +309,7 @@ export async function PATCH(request: NextRequest) {
       email: user.email ?? "",
       ...updatePayload,
     })
-    .select(PROFILE_SELECT_WITH_TARGET_ROLES)
+    .select(PROFILE_SELECT_FULL)
     .maybeSingle();
 
   if (insertError) {

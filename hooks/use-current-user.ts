@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import { parseSkillsFromProfile } from "@/lib/profile/skills";
 import { parseTargetRolesFromProfile } from "@/lib/profile/target-roles";
 
 type CurrentUser = {
@@ -19,6 +20,7 @@ type CurrentUser = {
   employmentType: string;
   workRights: string;
   targetRoles: string[];
+  skills: string[];
 };
 
 export type ProfileSnapshot = {
@@ -33,6 +35,7 @@ export type ProfileSnapshot = {
   employmentType: string;
   workRights: string;
   targetRoles: string[];
+  skills: string[];
 };
 
 type ProfileApiResponse = {
@@ -74,6 +77,7 @@ function mapProfileToUser(
     employmentType: profile.employmentType,
     workRights: profile.workRights,
     targetRoles: parseTargetRolesFromProfile(profile.targetRoles),
+    skills: parseSkillsFromProfile(profile.skills),
   };
 }
 

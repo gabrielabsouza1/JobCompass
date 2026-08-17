@@ -7,6 +7,7 @@ type UserMatchProfile = {
   workMode?: string;
   employmentType?: string;
   workRights?: string;
+  skills?: string[];
 };
 
 function normalizeText(value?: string) {
@@ -98,28 +99,28 @@ function calculateEmploymentScore(job: Job, profile: UserMatchProfile) {
   return 0;
 }
 
-function calculateSkillsScore(job: Job) {
-  const priorityKeywords = [
-    "qa",
-    "tester",
-    "testing",
-    "software",
-    "support",
-    "administration",
-    "customer",
-    "sql",
-    "jira",
-  ];
+function calculateSkillsScore(job: Job, profile: UserMatchProfile) {
+  const profileSkills = (profile.skills ?? [])
+    .map((skill) => normalizeText(skill))
+    .filter(Boolean);
+
+  if (profileSkills.length === 0) {
+    return 0;
+  }
 
   const searchableText = normalizeText(
     `${job.title} ${job.description} ${job.skills.join(" ")}`
   );
 
-  const matchedKeywords = priorityKeywords.filter((keyword) =>
-    searchableText.includes(keyword)
-  );
+  const matchedSkills = profileSkills.filter((skill) => {
+    if (searchableText.includes(skill)) {
+      return true;
+    }
 
-  return Math.min(matchedKeywords.length * 4, 20);
+    return skill.split(/\s+/).some((word) => word.length > 2 && searchableText.includes(word));
+  });
+
+  return Math.min(matchedSkills.length * 4, 20);
 }
 
 function calculateWorkRightsScore(job: Job, profile: UserMatchProfile) {
@@ -151,7 +152,7 @@ export function calculateMatchScore(job: Job, profile: UserMatchProfile) {
   const locationScore = calculateLocationScore(job, profile);
   const workModeScore = calculateWorkModeScore(job, profile);
   const employmentScore = calculateEmploymentScore(job, profile);
-  const skillsScore = calculateSkillsScore(job);
+  const skillsScore = calculateSkillsScore(job, profile);
   const workRightsScore = calculateWorkRightsScore(job, profile);
 
   const totalScore =
