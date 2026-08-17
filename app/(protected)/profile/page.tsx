@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -76,7 +76,10 @@ export default function ProfilePage() {
 
   const displayedTargetRoles = user?.targetRoles ?? [];
   const displayedSkills = user?.skills ?? [];
-  const nextSkillSuggestion = suggestNextSkill(displayedSkills);
+  const displayedSkillsKey = displayedSkills.join("|");
+  const [nextSkillSuggestion, setNextSkillSuggestion] = useState<string | null>(
+    () => suggestNextSkill(displayedSkills)
+  );
   const locationSummary =
     user?.cityName && user?.stateName && user?.countryName
       ? `${user.cityName}, ${user.stateName}, ${user.countryName}`
@@ -98,6 +101,40 @@ export default function ProfilePage() {
   const suggestedNextSkillText = nextSkillSuggestion
     ? `Add ${nextSkillSuggestion} to improve matches for roles that mention it in job descriptions.`
     : "You have covered the starter skill suggestions. Keep adding skills from your experience.";
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const exclude = displayedSkillsKey;
+
+    async function loadNextSkillSuggestion() {
+      const response = await fetch(
+        `/api/skills/suggest?q=&exclude=${encodeURIComponent(exclude)}&limit=1`,
+        { signal: controller.signal }
+      );
+
+      if (!response.ok || !isMounted) {
+        return;
+      }
+
+      const data = (await response.json()) as { suggestions?: string[] };
+      const fallback = suggestNextSkill(
+        displayedSkillsKey ? displayedSkillsKey.split("|") : []
+      );
+      const suggestion = data.suggestions?.[0] ?? fallback;
+
+      if (isMounted) {
+        setNextSkillSuggestion(suggestion);
+      }
+    }
+
+    void loadNextSkillSuggestion();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [displayedSkillsKey]);
 
   const preferences = [
     {

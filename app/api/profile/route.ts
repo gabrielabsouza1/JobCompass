@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
 import { parseSkillsFromProfile, uniqueSkills } from "@/lib/profile/skills";
+import { recordSkillUsage } from "@/lib/skills/record-skill-usage";
+import { normalizedSkillName } from "@/lib/skills/skill-catalog";
 import { parseTargetRolesFromProfile, uniqueTargetRoles } from "@/lib/profile/target-roles";
 import { createClient } from "@/lib/supabase/server";
 
@@ -78,6 +80,14 @@ function buildProfileUpdate(body: ProfileUpdateBody) {
   }
 
   return update;
+}
+
+function getNewlyAddedSkills(previousSkills: string[], nextSkills: string[]) {
+  const previous = new Set(previousSkills.map((skill) => normalizedSkillName(skill)));
+
+  return nextSkills.filter(
+    (skill) => !previous.has(normalizedSkillName(skill))
+  );
 }
 
 function mapProfileRow(
@@ -206,6 +216,16 @@ export async function PATCH(request: NextRequest) {
   }
 
   const supabase = await createClient();
+  let previousSkills: string[] = [];
+
+  if (updatePayload.skills) {
+    try {
+      const currentProfile = await loadProfileForUser(user.id, user.email ?? "");
+      previousSkills = currentProfile.skills;
+    } catch (error) {
+      console.error(error);
+    }
+  }
 
   const { data: updatedProfile, error: updateError } = await supabase
     .from("profiles")
@@ -271,6 +291,12 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (updatedProfile) {
+    if (updatePayload.skills) {
+      const nextSkills = parseSkillsFromProfile(updatedProfile.skills);
+      const addedSkills = getNewlyAddedSkills(previousSkills, nextSkills);
+      await recordSkillUsage(addedSkills);
+    }
+
     return NextResponse.json({
       profile: mapProfileRow(updatedProfile, user.email ?? ""),
     });
@@ -290,6 +316,11 @@ export async function PATCH(request: NextRequest) {
   if (count && count > 0) {
     try {
       const profile = await loadProfileForUser(user.id, user.email ?? "");
+
+      if (updatePayload.skills) {
+        const addedSkills = getNewlyAddedSkills(previousSkills, profile.skills);
+        await recordSkillUsage(addedSkills);
+      }
 
       return NextResponse.json({ profile });
     } catch (reloadError) {
@@ -326,6 +357,12 @@ export async function PATCH(request: NextRequest) {
       },
       { status: 403 }
     );
+  }
+
+  if (updatePayload.skills) {
+    const nextSkills = parseSkillsFromProfile(insertedProfile.skills);
+    const addedSkills = getNewlyAddedSkills(previousSkills, nextSkills);
+    await recordSkillUsage(addedSkills);
   }
 
   return NextResponse.json({
