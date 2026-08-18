@@ -727,7 +727,9 @@ export function OnboardingWizard() {
 
             {currentStep === 4 ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                {jobSources.map((source) => {
+                {jobSources
+                  .filter((source) => source.selectable)
+                  .map((source) => {
                   const selected = isSourceSelected(source.id);
                   const atLimit = selectedSourceIds.length >= 5 && !selected;
 

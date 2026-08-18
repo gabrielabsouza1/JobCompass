@@ -3,14 +3,12 @@
 import { useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
+import {
+  DEFAULT_SELECTED_SOURCE_IDS,
+  getJobSourceById,
+} from "@/lib/jobs/source-registry";
 
-const DEFAULT_SELECTED_SOURCES = [
-  "adzuna",
-  "jooble",
-  "remotive",
-  "seek",
-  "linkedin",
-];
+const DEFAULT_SELECTED_SOURCES = DEFAULT_SELECTED_SOURCE_IDS;
 
 type UserSourceRow = {
   source_id: string;
@@ -91,6 +89,12 @@ export function useJobSources() {
   }
 
   async function toggleSource(sourceId: string) {
+    const source = getJobSourceById(sourceId);
+
+    if (source && !source.selectable) {
+      return;
+    }
+
     const supabase = createClient();
 
     const {

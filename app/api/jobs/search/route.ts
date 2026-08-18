@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
-import { buildAdzunaWhatFromQueryAndRoles } from "@/lib/jobs/build-adzuna-search-query";
+import { buildAdzunaWhatFromQuery } from "@/lib/jobs/build-adzuna-search-query";
 import {
   buildAdzunaWhereFromFilters,
   buildProfileFilterDefaults,
@@ -19,12 +19,12 @@ import {
   getAdzunaCodeFromCountryName,
   getAdzunaCountryByName,
 } from "@/lib/jobs/adzuna-countries";
+import { jobMatchesSelectedInAppSources } from "@/lib/jobs/source-registry";
 
 async function searchAdzunaJobs(
   countryCode: string,
   filters: {
     query: string;
-    targetRoles: string[];
     country: string | null;
     state: string | null;
     city: string | null;
@@ -33,10 +33,7 @@ async function searchAdzunaJobs(
     perPage: number;
   }
 ) {
-  const { what, whatOr } = buildAdzunaWhatFromQueryAndRoles(
-    filters.query,
-    filters.targetRoles
-  );
+  const { what } = buildAdzunaWhatFromQuery(filters.query);
   const where = buildAdzunaWhereFromFilters(
     filters.country,
     filters.state,
@@ -46,14 +43,13 @@ async function searchAdzunaJobs(
   let resolvedWhat = what;
   const workModes = parseWorkModeFilter(filters.workMode ?? "");
 
-  if (workModes.includes("remote") && !resolvedWhat && !whatOr) {
+  if (workModes.includes("remote") && !resolvedWhat) {
     resolvedWhat = "remote";
   }
 
   return getAdzunaJobs({
     countryCode,
     what: resolvedWhat,
-    whatOr,
     where,
     resultsPerPage: filters.perPage,
     page: filters.page,
@@ -210,12 +206,18 @@ export async function GET(request: NextRequest) {
   const profileTargetRoles = targetRolesFromProfileValue(
     resolvedProfile.target_roles
   );
-  const activeTargetRoles = hasTargetRolesParam
+  const explicitTargetRoles = hasTargetRolesParam
     ? (targetRolesParam ?? "")
         .split("|")
         .map((role) => role.trim())
         .filter(Boolean)
-    : profileTargetRoles;
+    : null;
+  const rankingTargetRoles =
+    explicitTargetRoles !== null ? explicitTargetRoles : profileTargetRoles;
+  const strictTargetRoles =
+    explicitTargetRoles !== null && explicitTargetRoles.length > 0
+      ? explicitTargetRoles
+      : [];
 
   const hasSkillsParam = searchParams.has("skills");
   const activeSkills = hasSkillsParam
@@ -227,7 +229,6 @@ export async function GET(request: NextRequest) {
 
   const adzunaSearchFilters = {
     query,
-    targetRoles: activeTargetRoles,
     country,
     state,
     city,
@@ -241,6 +242,7 @@ export async function GET(request: NextRequest) {
     employmentType,
     workRights,
     skills: activeSkills,
+    targetRoles: strictTargetRoles,
   };
 
   const profileMatchContext = {
@@ -262,15 +264,14 @@ export async function GET(request: NextRequest) {
       }),
     jobFilterOptions,
     profileMatchContext,
-    activeTargetRoles,
+    rankingTargetRoles,
     page,
     perPage,
     sortBy
   );
 
   const { jobs: sampleJobs } = await searchAdzunaJobs(adzunaCountryCode, {
-    query,
-    targetRoles: [],
+    query: "",
     country: null,
     state: null,
     city: null,
@@ -280,9 +281,7 @@ export async function GET(request: NextRequest) {
   });
 
   const sampleAfterSources = sampleJobs.filter((job) =>
-    selectedSourceIds.some((sourceId) =>
-      job.source.toLowerCase().includes(sourceId.toLowerCase())
-    )
+    jobMatchesSelectedInAppSources(job.source, selectedSourceIds)
   );
 
   const filterOptions = mergeFilterOptions(
