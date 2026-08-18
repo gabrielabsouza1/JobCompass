@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import {
   Check,
   ExternalLink,
@@ -12,13 +13,21 @@ import {
 } from "lucide-react";
 
 import { jobSources } from "@/data/job-sources";
+import { SmartLinkPanel } from "@/components/jobs/smart-link-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AppToast } from "@/components/ui/app-toast";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobSources } from "@/hooks/use-job-sources";
 import { useToast } from "@/hooks/use-toast";
+import {
+  buildSmartSearchParamsFromProfile,
+  buildSmartSearchUrl,
+} from "@/lib/jobs/smart-links/build-smart-search-url";
+
+type SourceFilter = "all" | "in_app" | "smart_link" | "planned";
 
 function getTypeBadge(type: string) {
   if (type === "In-app results") {
@@ -28,18 +37,69 @@ function getTypeBadge(type: string) {
   return "bg-sky-50 text-sky-700 hover:bg-sky-50";
 }
 
+function getStatusBadge(status: string) {
+  if (status === "Connected") {
+    return "bg-emerald-50 text-emerald-700 hover:bg-emerald-50";
+  }
+
+  if (status === "Coming soon") {
+    return "bg-amber-50 text-amber-700 hover:bg-amber-50";
+  }
+
+  return "bg-slate-100 text-slate-700 hover:bg-slate-100";
+}
+
 function getIcon(category: string) {
   if (category === "API") return Globe2;
   return ExternalLink;
 }
 
 export default function SourcesPage() {
+  const { user } = useCurrentUser();
   const { selectedSourceIds, isSourceSelected, toggleSource } = useJobSources();
   const { toastMessage, showToast } = useToast();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
 
   const selectedSources = jobSources.filter((source) =>
     selectedSourceIds.includes(source.id)
   );
+
+  const filteredSources = useMemo(() => {
+    return jobSources.filter((source) => {
+      const matchesSearch =
+        searchQuery.trim().length === 0 ||
+        source.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        source.description.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesFilter =
+        sourceFilter === "all" ||
+        (sourceFilter === "in_app" && source.integration === "in_app") ||
+        (sourceFilter === "smart_link" && source.integration === "smart_link") ||
+        (sourceFilter === "planned" && source.integration === "planned");
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [searchQuery, sourceFilter]);
+
+  const smartSearchParams = buildSmartSearchParamsFromProfile({
+    targetRoles: user?.targetRoles,
+    cityName: user?.cityName,
+    stateName: user?.stateName,
+    countryName: user?.countryName,
+    workMode: user?.workMode,
+  });
+
+  function handleOpenSmartLink(sourceId: string, sourceName: string) {
+    const href = buildSmartSearchUrl(sourceId, smartSearchParams);
+
+    if (!href) {
+      showToast(`Could not open ${sourceName}`);
+      return;
+    }
+
+    window.open(href, "_blank", "noopener,noreferrer");
+  }
 
   return (
     <AppShell>
@@ -54,18 +114,17 @@ export default function SourcesPage() {
           </h1>
 
           <p className="mt-2 max-w-2xl text-slate-600">
-            Select up to 5 sources. JobCompass combines in-app job APIs with
-            smart search links for major Australian platforms.
+            Adzuna powers in-app results today. Smart links open SEEK, LinkedIn
+            and other platforms with your profile details pre-filled.
           </p>
         </div>
 
-        <Button
-          type="button"
-          onClick={() => showToast("Sources saved")}
-          className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700"
+        <Link
+          href="/jobs"
+          className="inline-flex h-11 items-center justify-center rounded-2xl bg-teal-600 px-6 text-sm font-semibold text-white transition hover:bg-teal-700"
         >
-          Save sources
-        </Button>
+          Continue to jobs
+        </Link>
       </div>
 
       <section className="mb-6 grid gap-4 md:grid-cols-3">
@@ -91,10 +150,8 @@ export default function SourcesPage() {
             </div>
 
             <div>
-              <p className="text-sm text-slate-500">In-app APIs</p>
-              <p className="text-3xl font-bold text-slate-950">
-                {jobSources.filter((source) => source.category === "API").length}
-              </p>
+              <p className="text-sm text-slate-500">In-app APIs live</p>
+              <p className="text-3xl font-bold text-slate-950">1</p>
             </div>
           </CardContent>
         </Card>
@@ -106,11 +163,12 @@ export default function SourcesPage() {
             </div>
 
             <div>
-              <p className="text-sm text-slate-500">Smart links</p>
+              <p className="text-sm text-slate-500">Smart links available</p>
               <p className="text-3xl font-bold text-slate-950">
                 {
-                  jobSources.filter((source) => source.category === "External")
-                    .length
+                  jobSources.filter(
+                    (source) => source.integration === "smart_link"
+                  ).length
                 }
               </p>
             </div>
@@ -123,34 +181,63 @@ export default function SourcesPage() {
           <div className="relative">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
             <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="Search sources"
               className="h-12 w-full rounded-2xl border border-slate-200 bg-white pl-12 pr-4 text-sm outline-none transition placeholder:text-slate-400 focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
             />
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <button className="rounded-full bg-teal-600 px-5 py-2 text-sm font-semibold text-white">
-              All
-            </button>
-            <button className="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700">
-              In-app
-            </button>
-            <button className="rounded-full border border-slate-200 px-5 py-2 text-sm font-semibold text-slate-700">
-              Smart links
-            </button>
+            {(
+              [
+                ["all", "All"],
+                ["in_app", "In-app"],
+                ["smart_link", "Smart links"],
+                ["planned", "Coming soon"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setSourceFilter(value)}
+                className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+                  sourceFilter === value
+                    ? "bg-teal-600 text-white"
+                    : "border border-slate-200 text-slate-700"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </section>
 
+      <section className="mb-6">
+        <SmartLinkPanel
+          selectedSourceIds={selectedSourceIds}
+          profile={{
+            targetRoles: user?.targetRoles,
+            cityName: user?.cityName,
+            stateName: user?.stateName,
+            countryName: user?.countryName,
+            workMode: user?.workMode,
+          }}
+        />
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {jobSources.map((source) => {
+        {filteredSources.map((source) => {
           const Icon = getIcon(source.category);
           const isSelected = isSourceSelected(source.id);
 
           return (
             <Card
               key={source.id}
-              className={`rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${isSelected ? "border-teal-200 ring-4 ring-teal-50" : ""}}`}
+              className={`rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                isSelected ? "border-teal-200 ring-4 ring-teal-50" : ""
+              } ${!source.selectable ? "opacity-80" : ""}`}
             >
               <CardContent className="p-5">
                 <div className="mb-5 flex items-start justify-between gap-4">
@@ -178,24 +265,31 @@ export default function SourcesPage() {
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isSelected && selectedSourceIds.length >= 5) {
-                        showToast("You can select up to 5 sources");
-                        return;
-                      }
+                  {source.selectable ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isSelected && selectedSourceIds.length >= 5) {
+                          showToast("You can select up to 5 sources");
+                          return;
+                        }
 
-                      toggleSource(source.id);
-                    }}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition ${isSelected
-                      ? "border-teal-200 bg-teal-600 text-white"
-                      : "border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
+                        void toggleSource(source.id);
+                      }}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition ${
+                        isSelected
+                          ? "border-teal-200 bg-teal-600 text-white"
+                          : "border-slate-200 bg-white text-slate-500 hover:border-teal-200 hover:bg-teal-50 hover:text-teal-700"
                       }`}
-                    aria-label={isSelected ? `Unselect ${source.name}` : `Select ${source.name}`}
-                  >
-                    {isSelected ? <Check className="h-5 w-5" /> : null}
-                  </button>
+                      aria-label={
+                        isSelected
+                          ? `Unselect ${source.name}`
+                          : `Select ${source.name}`
+                      }
+                    >
+                      {isSelected ? <Check className="h-5 w-5" /> : null}
+                    </button>
+                  ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -203,30 +297,50 @@ export default function SourcesPage() {
                     {source.type}
                   </Badge>
 
-                  <Badge className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-100">
+                  <Badge className={`rounded-full ${getStatusBadge(source.status)}`}>
                     {source.status}
                   </Badge>
                 </div>
 
-                {source.category === "External" ? (
-                  <div className="mt-5 rounded-2xl bg-slate-50 p-4">
-                    <div className="flex gap-3">
-                      <Lock className="mt-0.5 h-4 w-4 text-slate-400" />
-                      <p className="text-sm leading-6 text-slate-600">
-                        JobCompass will open this platform with your role,
-                        location and work mode already filled in.
-                      </p>
+                {source.integration === "smart_link" ? (
+                  <div className="mt-5 space-y-3">
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <div className="flex gap-3">
+                        <Lock className="mt-0.5 h-4 w-4 text-slate-400" />
+                        <p className="text-sm leading-6 text-slate-600">
+                          Opens this platform in a new tab with your role and
+                          location pre-filled.
+                        </p>
+                      </div>
                     </div>
+
+                    {isSelected ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-10 w-full rounded-2xl border-slate-200"
+                        onClick={() => handleOpenSmartLink(source.id, source.name)}
+                      >
+                        <ExternalLink className="mr-2 h-4 w-4" />
+                        Open {source.name} search
+                      </Button>
+                    ) : null}
                   </div>
-                ) : (
+                ) : source.integration === "in_app" ? (
                   <div className="mt-5 rounded-2xl bg-emerald-50 p-4">
                     <div className="flex gap-3">
                       <ShieldCheck className="mt-0.5 h-4 w-4 text-emerald-600" />
                       <p className="text-sm leading-6 text-slate-600">
-                        Jobs from this source can appear directly inside your
+                        Jobs from this source appear directly inside your
                         JobCompass feed.
                       </p>
                     </div>
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-2xl bg-amber-50 p-4">
+                    <p className="text-sm leading-6 text-slate-600">
+                      This API integration is planned for a future release.
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -234,12 +348,6 @@ export default function SourcesPage() {
           );
         })}
       </section>
-
-      <div className="mt-8 flex justify-end">
-        <Button className="h-12 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700">
-          <Link href="/jobs">Continue to jobs</Link>
-        </Button>
-      </div>
       <AppToast message={toastMessage} />
     </AppShell>
   );

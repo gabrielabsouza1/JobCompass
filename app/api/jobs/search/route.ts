@@ -19,6 +19,7 @@ import {
   getAdzunaCodeFromCountryName,
   getAdzunaCountryByName,
 } from "@/lib/jobs/adzuna-countries";
+import { jobMatchesSelectedInAppSources } from "@/lib/jobs/source-registry";
 
 async function searchAdzunaJobs(
   countryCode: string,
@@ -280,9 +281,7 @@ export async function GET(request: NextRequest) {
   });
 
   const sampleAfterSources = sampleJobs.filter((job) =>
-    selectedSourceIds.some((sourceId) =>
-      job.source.toLowerCase().includes(sourceId.toLowerCase())
-    )
+    jobMatchesSelectedInAppSources(job.source, selectedSourceIds)
   );
 
   const filterOptions = mergeFilterOptions(

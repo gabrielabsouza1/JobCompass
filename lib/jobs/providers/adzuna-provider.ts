@@ -1,6 +1,7 @@
 import type { Job } from "@/types";
 import { normalizeJob } from "@/lib/jobs/job-normalizer";
 import { extractJobSkills } from "@/lib/jobs/extract-job-skills";
+import { detectWorkRightsRisk } from "@/lib/jobs/detect-work-rights-risk";
 import { normalizeAdzunaStaticUrl } from "@/lib/jobs/extract-adzuna-logo";
 import {
   ADZUNA_COUNTRIES,
@@ -143,7 +144,7 @@ function normalizeAdzunaJob(job: AdzunaJob): Job {
     skills: extractJobSkills(title, description),
     description,
     url: job.redirect_url,
-    workRightsRisk: "Low",
+    workRightsRisk: detectWorkRightsRisk(title, description),
     companyLogoUrl: getCompanyLogoUrl(job),
   });
 }

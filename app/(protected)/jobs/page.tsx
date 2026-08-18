@@ -28,11 +28,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { JobCard } from "@/components/jobs/job-card";
+import { SmartLinkPanel } from "@/components/jobs/smart-link-panel";
 import { JobsFiltersPanel } from "@/components/jobs/jobs-filters-panel";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobs } from "@/hooks/use-jobs";
+import { useJobSources } from "@/hooks/use-job-sources";
+import { hasSelectedInAppSources } from "@/lib/jobs/source-registry";
 
 type JobSortOption = "best_match" | "date_posted";
 
@@ -40,6 +43,7 @@ const JOBS_PER_PAGE = 10;
 
 export default function JobsPage() {
   const { savedJobIds, isJobSaved, toggleSavedJob } = useSavedJobs();
+  const { selectedSourceIds } = useJobSources();
   const { toastMessage, showToast } = useToast();
   const { user, isLoadingUser } = useCurrentUser();
   const [sourceFilter, setSourceFilter] = useState("any");
@@ -435,14 +439,35 @@ export default function JobsPage() {
                   {renderPagination()}
                 </>
               ) : (
-                <EmptyState
-                  title="No jobs found"
-                  description="Try changing your filters, search terms, or selected job sources."
-                  actionLabel="Reset filters"
-                  onAction={clearFilters}
-                  secondaryActionLabel="Manage sources"
-                  secondaryActionHref="/sources"
-                />
+                <div className="space-y-4">
+                  <EmptyState
+                    title={
+                      hasSelectedInAppSources(selectedSourceIds)
+                        ? "No jobs found"
+                        : "No in-app sources selected"
+                    }
+                    description={
+                      hasSelectedInAppSources(selectedSourceIds)
+                        ? "Try changing your filters, search terms, or selected job sources."
+                        : "Select Adzuna in Sources to see in-app jobs, or use the smart links below to search external platforms."
+                    }
+                    actionLabel="Reset filters"
+                    onAction={clearFilters}
+                    secondaryActionLabel="Manage sources"
+                    secondaryActionHref="/sources"
+                  />
+
+                  <SmartLinkPanel
+                    selectedSourceIds={selectedSourceIds}
+                    profile={{
+                      targetRoles: user?.targetRoles,
+                      cityName: user?.cityName,
+                      stateName: user?.stateName,
+                      countryName: user?.countryName,
+                      workMode: user?.workMode,
+                    }}
+                  />
+                </div>
               )}
             </div>
           ) : null}

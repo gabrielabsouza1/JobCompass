@@ -8,6 +8,7 @@ import {
   workModeOptions,
   workRightsOptions,
 } from "@/data/profile-options";
+import { jobMatchesSelectedInAppSources } from "@/lib/jobs/source-registry";
 
 export type JobsLocationOption = {
   country: string;
@@ -507,8 +508,9 @@ export function jobMatchesSearchFilters(
     skills?: string[];
   }
 ) {
-  const passesSource = options.selectedSourceIds.some((sourceId) =>
-    job.source.toLowerCase().includes(sourceId.toLowerCase())
+  const passesSource = jobMatchesSelectedInAppSources(
+    job.source,
+    options.selectedSourceIds
   );
 
   if (!passesSource) {
