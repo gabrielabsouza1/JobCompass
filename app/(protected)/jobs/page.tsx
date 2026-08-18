@@ -201,10 +201,11 @@ export default function JobsPage() {
     );
   }
 
-  function handleToggleSavedJob(jobId: string) {
+  async function handleToggleSavedJob(jobId: string) {
+    const job = visibleJobs.find((item) => item.id === jobId);
     const wasSaved = isJobSaved(jobId);
 
-    toggleSavedJob(jobId);
+    await toggleSavedJob(jobId, job);
 
     showToast(wasSaved ? "Job removed from saved" : "Job saved");
   }
@@ -425,7 +426,9 @@ export default function JobsPage() {
                       key={job.id}
                       job={job}
                       isSaved={isJobSaved(job.id)}
-                      onToggleSave={() => handleToggleSavedJob(job.id)}
+                      onToggleSave={() => {
+                        void handleToggleSavedJob(job.id);
+                      }}
                     />
                   ))}
 

@@ -1,17 +1,34 @@
 import Link from "next/link";
 
-import type { Job } from "@/types";
+import type { Job, ApplicationStatus } from "@/types";
 import type { MockApplication } from "@/data/mock-applications";
 import { formatSalary } from "@/lib/job-utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 
+const STATUS_OPTIONS: ApplicationStatus[] = [
+  "Saved",
+  "Applied",
+  "Interview",
+  "Offer",
+  "Rejected",
+  "Archived",
+];
+
 type ApplicationCardProps = {
   job: Job;
   application: MockApplication;
+  onStatusChange?: (applicationId: string, status: ApplicationStatus) => void;
 };
 
-export function ApplicationCard({ job, application }: ApplicationCardProps) {
+export function ApplicationCard({
+  job,
+  application,
+  onStatusChange,
+}: ApplicationCardProps) {
+  const canUpdateStatus =
+    Boolean(onStatusChange) && !application.id.startsWith("saved-");
+
   return (
     <Card className="rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <CardContent className="p-4">
@@ -46,6 +63,30 @@ export function ApplicationCard({ job, application }: ApplicationCardProps) {
             {job.source}
           </Badge>
         </div>
+
+        {canUpdateStatus ? (
+          <div className="mt-4">
+            <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Status
+            </label>
+            <select
+              value={application.status}
+              onChange={(event) =>
+                onStatusChange?.(
+                  application.id,
+                  event.target.value as ApplicationStatus
+                )
+              }
+              className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+            >
+              {STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {status}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-2xl bg-slate-50 p-3">
           <p className="text-xs font-medium text-slate-500">Next step</p>

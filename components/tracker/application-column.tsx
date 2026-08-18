@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 
-import type { Job } from "@/types";
+import type { ApplicationStatus, Job } from "@/types";
 import type { MockApplication } from "@/data/mock-applications";
 import { ApplicationCard } from "@/components/tracker/application-card";
 
@@ -17,9 +17,13 @@ type ApplicationColumnProps = {
     color: string;
     items: ApplicationItem[];
   };
+  onStatusChange?: (applicationId: string, status: ApplicationStatus) => void;
 };
 
-export function ApplicationColumn({ column }: ApplicationColumnProps) {
+export function ApplicationColumn({
+  column,
+  onStatusChange,
+}: ApplicationColumnProps) {
   const Icon = column.icon;
 
   return (
@@ -48,6 +52,7 @@ export function ApplicationColumn({ column }: ApplicationColumnProps) {
               key={`${column.id}-${application.id}-${index}`}
               job={job}
               application={application}
+              onStatusChange={onStatusChange}
             />
           ))
         ) : (
