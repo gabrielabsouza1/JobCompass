@@ -1,37 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { Job } from "@/types";
-
+import { createTestJob } from "@/lib/test/create-test-job";
 import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
-
-function createJob(overrides: Partial<Job> = {}): Job {
-  return {
-    id: "job-1",
-    title: "QA Tester",
-    company: "Acme",
-    source: "Adzuna",
-    sourceType: "api",
-    location: "Sydney, NSW, Australia",
-    country: "Australia",
-    state: "NSW",
-    city: "Sydney",
-    workMode: "Hybrid",
-    employmentType: "Full-time",
-    postedAt: "2026-08-01",
-    matchScore: 0,
-    skills: ["JIRA", "Manual Testing"],
-    matchedProfileSkills: [],
-    missingProfileSkills: [],
-    description: "Manual testing role with JIRA and SQL.",
-    url: "https://example.com/job",
-    workRightsRisk: "Low",
-    ...overrides,
-  };
-}
 
 describe("calculateMatchScore", () => {
   it("rewards matching location, work mode, employment type, and skills", () => {
-    const score = calculateMatchScore(createJob(), {
+    const score = calculateMatchScore(createTestJob(), {
       cityName: "Sydney",
       stateName: "NSW",
       countryName: "Australia",
@@ -45,11 +19,11 @@ describe("calculateMatchScore", () => {
   });
 
   it("penalizes high work-rights risk for restricted profiles", () => {
-    const lowRiskScore = calculateMatchScore(createJob({ workRightsRisk: "Low" }), {
+    const lowRiskScore = calculateMatchScore(createTestJob({ workRightsRisk: "Low" }), {
       workRights: "student_visa",
     });
     const highRiskScore = calculateMatchScore(
-      createJob({ workRightsRisk: "High" }),
+      createTestJob({ workRightsRisk: "High" }),
       {
         workRights: "student_visa",
       }
