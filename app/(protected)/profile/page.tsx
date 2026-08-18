@@ -5,7 +5,6 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   CheckCircle2,
-  FileText,
   Globe2,
   GraduationCap,
   MapPin,

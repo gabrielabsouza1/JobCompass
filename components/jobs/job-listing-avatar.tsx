@@ -15,20 +15,20 @@ export function JobListingAvatar({
   job,
   imageClassName,
 }: JobListingAvatarProps) {
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(
+  const [fetchedLogoUrl, setFetchedLogoUrl] = useState<string | null>(null);
+  const [companyLogoFailed, setCompanyLogoFailed] = useState(false);
+  const [trackedCompanyLogoUrl, setTrackedCompanyLogoUrl] = useState(
     job.companyLogoUrl ?? null
   );
-  const [companyLogoFailed, setCompanyLogoFailed] = useState(false);
+
+  if ((job.companyLogoUrl ?? null) !== trackedCompanyLogoUrl) {
+    setTrackedCompanyLogoUrl(job.companyLogoUrl ?? null);
+    setFetchedLogoUrl(null);
+    setCompanyLogoFailed(false);
+  }
 
   useEffect(() => {
-    if (job.companyLogoUrl) {
-      setCompanyLogoUrl(job.companyLogoUrl);
-      setCompanyLogoFailed(false);
-      return;
-    }
-
-    if (!job.url.includes("adzuna")) {
-      setCompanyLogoUrl(null);
+    if (job.companyLogoUrl || !job.url.includes("adzuna")) {
       return;
     }
 
@@ -46,7 +46,7 @@ export function JobListingAvatar({
         const data = (await response.json()) as { url?: string | null };
 
         if (!cancelled && data.url) {
-          setCompanyLogoUrl(data.url);
+          setFetchedLogoUrl(data.url);
           setCompanyLogoFailed(false);
         }
       } catch {
@@ -62,7 +62,9 @@ export function JobListingAvatar({
   }, [job.companyLogoUrl, job.id, job.url]);
 
   const resolvedLogoUrl =
-    companyLogoUrl && !companyLogoFailed ? companyLogoUrl : ADZUNA_LOGO_SRC;
+    (job.companyLogoUrl ?? fetchedLogoUrl) && !companyLogoFailed
+      ? (job.companyLogoUrl ?? fetchedLogoUrl)!
+      : ADZUNA_LOGO_SRC;
 
   return (
     <img

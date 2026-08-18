@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { Filter } from "lucide-react";
 import {
@@ -50,7 +50,6 @@ export default function JobsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<JobSortOption>("best_match");
-  const [currentPage, setCurrentPage] = useState(1);
   const [countryFilter, setCountryFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
   const [cityFilter, setCityFilter] = useState("");
@@ -63,8 +62,79 @@ export default function JobsPage() {
   const [selectedTargetRoles, setSelectedTargetRoles] = useState<string[]>([]);
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [filtersReady, setFiltersReady] = useState(false);
+  const [initializedForUser, setInitializedForUser] = useState<string | null>(
+    null
+  );
   const jobsTopRef = useRef<HTMLElement>(null);
   const pendingScrollToTopRef = useRef(false);
+
+  const filterKey = useMemo(
+    () =>
+      JSON.stringify({
+        searchQuery,
+        countryFilter,
+        stateFilter,
+        cityFilter,
+        selectedWorkModes,
+        selectedEmploymentTypes,
+        selectedWorkRights,
+        selectedTargetRoles,
+        selectedSkills,
+        sourceFilter,
+        sortBy,
+      }),
+    [
+      searchQuery,
+      countryFilter,
+      stateFilter,
+      cityFilter,
+      selectedWorkModes,
+      selectedEmploymentTypes,
+      selectedWorkRights,
+      selectedTargetRoles,
+      selectedSkills,
+      sourceFilter,
+      sortBy,
+    ]
+  );
+  const [pageByFilterKey, setPageByFilterKey] = useState<Record<string, number>>(
+    {}
+  );
+  const currentPage = pageByFilterKey[filterKey] ?? 1;
+
+  function setCurrentPage(page: number) {
+    setPageByFilterKey((current) => ({
+      ...current,
+      [filterKey]: page,
+    }));
+  }
+
+  if (user) {
+    if (initializedForUser !== user.email) {
+      setInitializedForUser(user.email);
+      setCountryFilter(user.countryName || "any");
+      setStateFilter(user.stateName || "any");
+      setCityFilter(user.cityName || "any");
+      setSelectedWorkModes(
+        user.workMode && user.workMode !== "any"
+          ? workModesFromProfileValue(user.workMode)
+          : []
+      );
+      setSelectedEmploymentTypes(
+        user.employmentType && user.employmentType !== "any"
+          ? employmentTypesFromProfileValue(user.employmentType)
+          : []
+      );
+      setSelectedWorkRights(workRightsFromProfileValue(user.workRights));
+      const profileRoles = targetRolesFromProfileValue(user.targetRoles);
+      setTargetRoleOptions(profileRoles);
+      setSelectedTargetRoles([]);
+      setFiltersReady(true);
+    }
+  } else if (initializedForUser !== null) {
+    setInitializedForUser(null);
+    setFiltersReady(false);
+  }
 
   const {
     jobs,
@@ -100,31 +170,6 @@ export default function JobsPage() {
   const visibleJobs = jobs;
 
   useEffect(() => {
-    if (!user) {
-      return;
-    }
-
-    setCountryFilter(user.countryName || "any");
-    setStateFilter(user.stateName || "any");
-    setCityFilter(user.cityName || "any");
-    setSelectedWorkModes(
-      user.workMode && user.workMode !== "any"
-        ? workModesFromProfileValue(user.workMode)
-        : []
-    );
-    setSelectedEmploymentTypes(
-      user.employmentType && user.employmentType !== "any"
-        ? employmentTypesFromProfileValue(user.employmentType)
-        : []
-    );
-    setSelectedWorkRights(workRightsFromProfileValue(user.workRights));
-    const profileRoles = targetRolesFromProfileValue(user.targetRoles);
-    setTargetRoleOptions(profileRoles);
-    setSelectedTargetRoles([]);
-    setFiltersReady(true);
-  }, [user]);
-
-  useEffect(() => {
     if (jobs.length > 0) {
       cacheJobs(jobs);
     }
@@ -135,22 +180,6 @@ export default function JobsPage() {
 
     return () => clearTimeout(timer);
   }, [searchInput]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [
-    searchQuery,
-    countryFilter,
-    stateFilter,
-    cityFilter,
-    selectedWorkModes,
-    selectedEmploymentTypes,
-    selectedWorkRights,
-    selectedTargetRoles,
-    selectedSkills,
-    sourceFilter,
-    sortBy,
-  ]);
 
   useEffect(() => {
     if (!pendingScrollToTopRef.current || isLoadingJobs) {
