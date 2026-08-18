@@ -43,6 +43,7 @@ const PROFILE_SELECT_BASE =
 
 const PROFILE_SELECT_VARIANTS: string[] = [
   PROFILE_SELECT_FULL,
+  PROFILE_SELECT_WITHOUT_RESUME,
   PROFILE_SELECT_LEGACY,
   PROFILE_SELECT_WITHOUT_SKILLS,
   PROFILE_SELECT_WITHOUT_TARGET_ROLES,
@@ -187,6 +188,48 @@ async function loadProfileForUser(userId: string, authEmail: string) {
   }
 
   throw lastError ?? new Error("Could not load profile");
+}
+
+function enrichProfileFromUpdate(
+  profile: ReturnType<typeof mapProfileRow>,
+  updatePayload: Record<string, string | string[] | null>,
+  body: ProfileUpdateBody
+) {
+  const enriched = { ...profile };
+
+  if (
+    body.onboardingCompleted === true &&
+    !enriched.onboardingCompletedAt &&
+    typeof updatePayload.onboarding_completed_at === "string"
+  ) {
+    enriched.onboardingCompletedAt = updatePayload.onboarding_completed_at;
+  }
+
+  if (body.clearResume === true) {
+    enriched.resumePath = "";
+    enriched.resumeFilename = "";
+    enriched.resumeUploadedAt = null;
+  }
+
+  return enriched;
+}
+
+async function buildProfileResponseAfterUpdate(
+  userId: string,
+  authEmail: string,
+  updatePayload: Record<string, string | string[] | null>,
+  body: ProfileUpdateBody,
+  previousSkills: string[]
+) {
+  const profile = await loadProfileForUser(userId, authEmail);
+  const enrichedProfile = enrichProfileFromUpdate(profile, updatePayload, body);
+
+  if (updatePayload.skills) {
+    const addedSkills = getNewlyAddedSkills(previousSkills, enrichedProfile.skills);
+    await recordSkillUsage(addedSkills);
+  }
+
+  return enrichedProfile;
 }
 
 export async function GET() {
@@ -349,15 +392,27 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (updatedProfile) {
-    if (updatePayload.skills) {
-      const nextSkills = parseSkillsFromProfile(updatedProfile.skills);
-      const addedSkills = getNewlyAddedSkills(previousSkills, nextSkills);
-      await recordSkillUsage(addedSkills);
-    }
+    try {
+      const profile = await buildProfileResponseAfterUpdate(
+        user.id,
+        user.email ?? "",
+        updatePayload,
+        body,
+        previousSkills
+      );
 
-    return NextResponse.json({
-      profile: mapProfileRow(updatedProfile, user.email ?? ""),
-    });
+      return NextResponse.json({ profile });
+    } catch (reloadError) {
+      console.error(reloadError);
+
+      return NextResponse.json({
+        profile: enrichProfileFromUpdate(
+          mapProfileRow(updatedProfile as Record<string, unknown>, user.email ?? ""),
+          updatePayload,
+          body
+        ),
+      });
+    }
   }
 
   const { count, error: countError } = await supabase
@@ -373,12 +428,13 @@ export async function PATCH(request: NextRequest) {
 
   if (count && count > 0) {
     try {
-      const profile = await loadProfileForUser(user.id, user.email ?? "");
-
-      if (updatePayload.skills) {
-        const addedSkills = getNewlyAddedSkills(previousSkills, profile.skills);
-        await recordSkillUsage(addedSkills);
-      }
+      const profile = await buildProfileResponseAfterUpdate(
+        user.id,
+        user.email ?? "",
+        updatePayload,
+        body,
+        previousSkills
+      );
 
       return NextResponse.json({ profile });
     } catch (reloadError) {
@@ -423,7 +479,25 @@ export async function PATCH(request: NextRequest) {
     await recordSkillUsage(addedSkills);
   }
 
+  try {
+    const profile = await buildProfileResponseAfterUpdate(
+      user.id,
+      user.email ?? "",
+      updatePayload,
+      body,
+      previousSkills
+    );
+
+    return NextResponse.json({ profile });
+  } catch (reloadError) {
+    console.error(reloadError);
+  }
+
   return NextResponse.json({
-    profile: mapProfileRow(insertedProfile, user.email ?? ""),
+    profile: enrichProfileFromUpdate(
+      mapProfileRow(insertedProfile as Record<string, unknown>, user.email ?? ""),
+      updatePayload,
+      body
+    ),
   });
 }

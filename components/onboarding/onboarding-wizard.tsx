@@ -377,10 +377,28 @@ export function OnboardingWizard() {
   }
 
   async function finishOnboarding() {
+    const completedAt = new Date().toISOString();
     const profile = await patchProfile({ onboardingCompleted: true });
 
-    if (profile) {
-      applyProfile(profile);
+    if (user) {
+      applyProfile({
+        fullName: profile?.fullName ?? user.fullName,
+        email: profile?.email ?? user.email,
+        countryCode: profile?.countryCode ?? user.countryCode,
+        countryName: profile?.countryName ?? user.countryName,
+        stateCode: profile?.stateCode ?? user.stateCode,
+        stateName: profile?.stateName ?? user.stateName,
+        cityName: profile?.cityName ?? user.cityName,
+        workMode: profile?.workMode ?? user.workMode,
+        employmentType: profile?.employmentType ?? user.employmentType,
+        workRights: profile?.workRights ?? user.workRights,
+        targetRoles: profile?.targetRoles ?? user.targetRoles,
+        skills: profile?.skills ?? user.skills,
+        resumePath: profile?.resumePath ?? user.resumePath,
+        resumeFilename: profile?.resumeFilename ?? user.resumeFilename,
+        resumeUploadedAt: profile?.resumeUploadedAt ?? user.resumeUploadedAt,
+        onboardingCompletedAt: profile?.onboardingCompletedAt ?? completedAt,
+      });
     } else {
       refreshUser();
     }

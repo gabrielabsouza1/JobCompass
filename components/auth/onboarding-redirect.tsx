@@ -13,42 +13,99 @@ export function OnboardingRedirect({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { user, isLoadingUser } = useCurrentUser();
+  const { user, isLoadingUser, applyProfile } = useCurrentUser();
 
   useEffect(() => {
     if (isLoadingUser || !user) {
       return;
     }
 
-    const isOnboardingRoute = pathname === "/onboarding";
-    const shouldOnboard = needsOnboarding({
-      fullName: user.fullName,
-      email: user.email,
-      countryCode: user.countryCode,
-      countryName: user.countryName,
-      stateCode: user.stateCode,
-      stateName: user.stateName,
-      cityName: user.cityName,
-      workMode: user.workMode,
-      employmentType: user.employmentType,
-      workRights: user.workRights,
-      targetRoles: user.targetRoles,
-      skills: user.skills,
-      resumePath: user.resumePath,
-      resumeFilename: user.resumeFilename,
-      resumeUploadedAt: user.resumeUploadedAt,
-      onboardingCompletedAt: user.onboardingCompletedAt,
-    });
+    let isMounted = true;
 
-    if (shouldOnboard && !isOnboardingRoute) {
-      router.replace("/onboarding");
-      return;
+    async function checkRedirect() {
+      const isOnboardingRoute = pathname === "/onboarding";
+
+      function profileNeedsOnboarding(profile: {
+        fullName: string;
+        email: string;
+        countryCode: string;
+        countryName: string;
+        stateCode: string;
+        stateName: string;
+        cityName: string;
+        workMode: string;
+        employmentType: string;
+        workRights: string;
+        targetRoles: string[];
+        skills: string[];
+        resumePath: string;
+        resumeFilename: string;
+        resumeUploadedAt: string | null;
+        onboardingCompletedAt: string | null;
+      }) {
+        return needsOnboarding(profile);
+      }
+
+      let activeProfile = {
+        fullName: user!.fullName,
+        email: user!.email,
+        countryCode: user!.countryCode,
+        countryName: user!.countryName,
+        stateCode: user!.stateCode,
+        stateName: user!.stateName,
+        cityName: user!.cityName,
+        workMode: user!.workMode,
+        employmentType: user!.employmentType,
+        workRights: user!.workRights,
+        targetRoles: user!.targetRoles,
+        skills: user!.skills,
+        resumePath: user!.resumePath,
+        resumeFilename: user!.resumeFilename,
+        resumeUploadedAt: user!.resumeUploadedAt,
+        onboardingCompletedAt: user!.onboardingCompletedAt,
+      };
+
+      if (profileNeedsOnboarding(activeProfile) && !isOnboardingRoute) {
+        try {
+          const response = await fetch("/api/profile", { cache: "no-store" });
+
+          if (response.ok) {
+            const data = (await response.json()) as {
+              profile?: typeof activeProfile;
+            };
+
+            if (data.profile?.onboardingCompletedAt) {
+              if (!isMounted) {
+                return;
+              }
+
+              applyProfile(data.profile);
+              return;
+            }
+          }
+        } catch (error) {
+          console.error(error);
+        }
+
+        if (!isMounted) {
+          return;
+        }
+
+        router.replace("/onboarding");
+        return;
+      }
+
+      if (!profileNeedsOnboarding(activeProfile) && isOnboardingRoute) {
+        router.replace("/dashboard");
+      }
     }
 
-    if (!shouldOnboard && isOnboardingRoute) {
-      router.replace("/dashboard");
-    }
-  }, [isLoadingUser, pathname, router, user]);
+    void checkRedirect();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [applyProfile, isLoadingUser, pathname, router, user]);
 
   if (isLoadingUser) {
     return (
