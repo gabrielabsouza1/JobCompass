@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BadgeCheck,
   BriefcaseBusiness,
@@ -29,27 +29,23 @@ import {
   type StateOption,
 } from "@/lib/location-api";
 import { AppShell } from "@/components/layout/app-shell";
+import { SkillAutocompleteInput } from "@/components/profile/skill-autocomplete-input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/use-current-user";
+import { suggestNextSkill } from "@/data/skill-suggestions";
+import { calculateProfileCompletion } from "@/lib/profile/calculate-profile-completion";
+import {
+  normalizeSkill,
+  uniqueSkills,
+} from "@/lib/profile/skills";
 import {
   normalizeTargetRole,
   uniqueTargetRoles,
 } from "@/lib/profile/target-roles";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
-
-const skills = [
-  "Manual Testing",
-  "Test Cases",
-  "Bug Reporting",
-  "JIRA",
-  "SQL Basics",
-  "Agile",
-  "Customer Support",
-  "Administration",
-];
 
 export default function ProfilePage() {
   const { user, refreshUser, applyProfile } = useCurrentUser();
@@ -70,12 +66,21 @@ export default function ProfilePage() {
   const [targetRoles, setTargetRoles] = useState<string[]>([]);
   const [newTargetRoleInput, setNewTargetRoleInput] = useState("");
   const [isSavingRoles, setIsSavingRoles] = useState(false);
+  const [isEditSkillsModalOpen, setIsEditSkillsModalOpen] = useState(false);
+  const [skills, setSkills] = useState<string[]>([]);
+  const [newSkillInput, setNewSkillInput] = useState("");
+  const [isSavingSkills, setIsSavingSkills] = useState(false);
   const [countries, setCountries] = useState<CountryOption[]>([]);
   const [states, setStates] = useState<StateOption[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
 
   const displayedTargetRoles = user?.targetRoles ?? [];
+  const displayedSkills = user?.skills ?? [];
+  const displayedSkillsKey = displayedSkills.join("|");
+  const [nextSkillSuggestion, setNextSkillSuggestion] = useState<string | null>(
+    () => suggestNextSkill(displayedSkills)
+  );
   const locationSummary =
     user?.cityName && user?.stateName && user?.countryName
       ? `${user.cityName}, ${user.stateName}, ${user.countryName}`
@@ -84,6 +89,70 @@ export default function ProfilePage() {
     displayedTargetRoles.length > 0
       ? displayedTargetRoles.join(", ")
       : "No target roles yet";
+  const skillsSummary =
+    displayedSkills.length > 0
+      ? displayedSkills.join(", ")
+      : "No skills added yet";
+  const matchInsightText =
+    displayedSkills.length > 0 && displayedTargetRoles.length > 0
+      ? `You are getting stronger matches for ${displayedTargetRoles.slice(0, 2).join(" and ")} roles because your profile includes ${displayedSkills.slice(0, 3).join(", ")} skills.`
+      : displayedSkills.length > 0
+        ? `Your profile includes ${displayedSkills.slice(0, 4).join(", ")} skills, which improves job match scoring.`
+        : "Add skills to your profile to improve how JobCompass ranks jobs for you.";
+  const suggestedNextSkillText = nextSkillSuggestion
+    ? `Add ${nextSkillSuggestion} to improve matches for roles that mention it in job descriptions.`
+    : "You have covered the starter skill suggestions. Keep adding skills from your experience.";
+  const profileCompletion = calculateProfileCompletion({
+    countryName: user?.countryName,
+    cityName: user?.cityName,
+    workMode: user?.workMode,
+    employmentType: user?.employmentType,
+    workRights: user?.workRights,
+    targetRoles: user?.targetRoles,
+    skills: user?.skills,
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    const controller = new AbortController();
+    const exclude = displayedSkillsKey;
+
+    async function loadNextSkillSuggestion() {
+      try {
+        const response = await fetch(
+          `/api/skills/suggest?q=&exclude=${encodeURIComponent(exclude)}&limit=1`,
+          { signal: controller.signal }
+        );
+
+        if (!response.ok || !isMounted) {
+          return;
+        }
+
+        const data = (await response.json()) as { suggestions?: string[] };
+        const fallback = suggestNextSkill(
+          displayedSkillsKey ? displayedSkillsKey.split("|") : []
+        );
+        const suggestion = data.suggestions?.[0] ?? fallback;
+
+        if (isMounted) {
+          setNextSkillSuggestion(suggestion);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+
+        console.error(error);
+      }
+    }
+
+    void loadNextSkillSuggestion();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
+  }, [displayedSkillsKey]);
 
   const preferences = [
     {
@@ -214,6 +283,65 @@ export default function ProfilePage() {
     setIsEditRolesModalOpen(true);
   }
 
+  async function openEditSkillsModal() {
+    setSkills(displayedSkills);
+    setNewSkillInput("");
+    setIsEditSkillsModalOpen(true);
+  }
+
+  function handleAddProfileSkill(skill: string) {
+    const normalized = normalizeSkill(skill);
+
+    if (!normalized) {
+      return;
+    }
+
+    setSkills((current) => uniqueSkills([...current, normalized]));
+    setNewSkillInput("");
+  }
+
+  function handleRemoveProfileSkill(skill: string) {
+    setSkills((current) => current.filter((item) => item !== skill));
+  }
+
+  async function handleSaveSkills() {
+    if (!user) {
+      return;
+    }
+
+    setIsSavingSkills(true);
+    setErrorMessage("");
+
+    try {
+      await saveProfileUpdates({ skills });
+      setIsEditSkillsModalOpen(false);
+      showToast("Skills updated");
+    } catch (error) {
+      console.error(error);
+      setErrorMessage(
+        error instanceof Error ? error.message : "Could not save skills"
+      );
+    } finally {
+      setIsSavingSkills(false);
+    }
+  }
+
+  async function handleQuickAddSuggestedSkill() {
+    if (!nextSkillSuggestion || !user) {
+      return;
+    }
+
+    const nextSkills = uniqueSkills([...displayedSkills, nextSkillSuggestion]);
+
+    try {
+      await saveProfileUpdates({ skills: nextSkills });
+      showToast(`${nextSkillSuggestion} added to your skills`);
+    } catch (error) {
+      console.error(error);
+      showToast("Could not add skill");
+    }
+  }
+
   function handleAddProfileTargetRole() {
     const normalized = normalizeTargetRole(newTargetRoleInput);
 
@@ -255,6 +383,7 @@ export default function ProfilePage() {
         employmentType: string;
         workRights: string;
         targetRoles: string[];
+        skills: string[];
       };
     };
 
@@ -395,7 +524,7 @@ export default function ProfilePage() {
                       Profile completion
                     </p>
                     <p className="mt-1 text-5xl font-bold text-teal-700">
-                      82%
+                      {profileCompletion}%
                     </p>
                   </div>
                 </div>
@@ -480,20 +609,27 @@ export default function ProfilePage() {
                 <Button
                   variant="outline"
                   className="rounded-2xl border-slate-200"
+                  onClick={openEditSkillsModal}
                 >
                   Add skill
                 </Button>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {skills.map((skill) => (
-                  <Badge
-                    key={skill}
-                    className="rounded-full bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-100"
-                  >
-                    {skill}
-                  </Badge>
-                ))}
+                {displayedSkills.length > 0 ? (
+                  displayedSkills.map((skill) => (
+                    <Badge
+                      key={skill}
+                      className="rounded-full bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-100"
+                    >
+                      {skill}
+                    </Badge>
+                  ))
+                ) : (
+                  <p className="text-sm text-slate-500">
+                    No skills added yet. Add skills to improve your match score.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -567,6 +703,16 @@ export default function ProfilePage() {
                   <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
                   <div>
                     <p className="text-sm font-semibold text-slate-950">
+                      Skills added
+                    </p>
+                    <p className="text-sm text-slate-500">{skillsSummary}</p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">
                       Work rights added
                     </p>
                     <p className="text-sm text-slate-500">
@@ -599,9 +745,7 @@ export default function ProfilePage() {
               <h2 className="font-bold text-slate-950">Match insight</h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                You are getting stronger matches for QA Tester and IT Support
-                roles because your profile includes testing, administration and
-                customer support skills.
+                {matchInsightText}
               </p>
             </CardContent>
           </Card>
@@ -615,15 +759,16 @@ export default function ProfilePage() {
               <h2 className="font-bold text-slate-950">Suggested next skill</h2>
 
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Add API Testing or Postman to improve matches for junior QA
-                roles.
+                {suggestedNextSkillText}
               </p>
 
               <Button
                 variant="outline"
                 className="mt-5 h-11 rounded-2xl border-slate-200 bg-white"
+                onClick={handleQuickAddSuggestedSkill}
+                disabled={!nextSkillSuggestion}
               >
-                Add Postman
+                {nextSkillSuggestion ? `Add ${nextSkillSuggestion}` : "All suggestions added"}
               </Button>
             </CardContent>
           </Card>
@@ -928,6 +1073,76 @@ export default function ProfilePage() {
                 className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSavingRoles ? "Saving..." : "Save roles"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isEditSkillsModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white shadow-xl">
+            <div className="border-b border-slate-100 px-6 py-5">
+              <h2 className="text-xl font-bold text-slate-950">Edit skills</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                These skills improve your job match score.
+              </p>
+            </div>
+
+            <div className="space-y-4 px-6 py-5">
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill) => (
+                  <button
+                    key={skill}
+                    type="button"
+                    onClick={() => handleRemoveProfileSkill(skill)}
+                    className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                  >
+                    {skill}
+                    <span className="text-slate-500">×</span>
+                  </button>
+                ))}
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">
+                  Add skill
+                </label>
+                <SkillAutocompleteInput
+                  value={newSkillInput}
+                  onChange={setNewSkillInput}
+                  onSelect={handleAddProfileSkill}
+                  existingSkills={skills}
+                />
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleAddProfileSkill(newSkillInput)}
+                className="h-10 rounded-2xl border-slate-200"
+              >
+                Add to list
+              </Button>
+            </div>
+
+            <div className="flex flex-col-reverse gap-3 border-t border-slate-100 px-6 py-5 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsEditSkillsModalOpen(false)}
+                className="h-11 rounded-2xl border-slate-200 px-6"
+              >
+                Cancel
+              </Button>
+
+              <Button
+                type="button"
+                onClick={handleSaveSkills}
+                disabled={isSavingSkills}
+                className="h-11 rounded-2xl bg-teal-600 px-6 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingSkills ? "Saving..." : "Save skills"}
               </Button>
             </div>
           </div>

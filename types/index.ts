@@ -28,6 +28,8 @@ export type Job = {
   postedAt: string;
   matchScore: number;
   skills: string[];
+  matchedProfileSkills?: string[];
+  missingProfileSkills?: string[];
   description: string;
   url: string;
   workRightsRisk: "Low" | "Medium" | "High";

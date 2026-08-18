@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { Filter } from "lucide-react";
-import { getPostedAtValue } from "@/lib/job-utils";
 import {
   employmentTypesFromProfileValue,
   serializeEmploymentTypeFilter,
@@ -13,12 +12,16 @@ import {
   workModesFromProfileValue,
   workRightsFromProfileValue,
 } from "@/lib/jobs/extract-filter-options";
-import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
 import {
   serializeTargetRolesFilter,
   targetRolesFromProfileValue,
   uniqueTargetRoles,
 } from "@/lib/profile/target-roles";
+import {
+  serializeSkillsFilter,
+  uniqueSkills,
+} from "@/lib/profile/skills";
+import { cacheJobs } from "@/lib/jobs/job-session-cache";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,6 +34,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useJobs } from "@/hooks/use-jobs";
 
+type JobSortOption = "best_match" | "date_posted";
+
 const JOBS_PER_PAGE = 10;
 
 export default function JobsPage() {
@@ -40,7 +45,7 @@ export default function JobsPage() {
   const [sourceFilter, setSourceFilter] = useState("any");
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortByNewest, setSortByNewest] = useState(false);
+  const [sortBy, setSortBy] = useState<JobSortOption>("best_match");
   const [currentPage, setCurrentPage] = useState(1);
   const [countryFilter, setCountryFilter] = useState("");
   const [stateFilter, setStateFilter] = useState("");
@@ -52,6 +57,7 @@ export default function JobsPage() {
   const [selectedWorkRights, setSelectedWorkRights] = useState<string[]>([]);
   const [targetRoleOptions, setTargetRoleOptions] = useState<string[]>([]);
   const [selectedTargetRoles, setSelectedTargetRoles] = useState<string[]>([]);
+  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [filtersReady, setFiltersReady] = useState(false);
   const jobsTopRef = useRef<HTMLElement>(null);
   const pendingScrollToTopRef = useRef(false);
@@ -61,10 +67,8 @@ export default function JobsPage() {
     total,
     totalPages,
     filterOptions,
-    profileDefaults,
     isLoadingJobs,
     jobsError,
-    fallbackMessage,
     refreshJobs,
   } = useJobs({
     page: currentPage,
@@ -77,27 +81,16 @@ export default function JobsPage() {
     employmentType: serializeEmploymentTypeFilter(selectedEmploymentTypes),
     workRights: serializeWorkRightsFilter(selectedWorkRights),
     targetRoles: serializeTargetRolesFilter(selectedTargetRoles),
+    skills:
+      selectedSkills.length > 0
+        ? serializeSkillsFilter(selectedSkills)
+        : undefined,
     source: sourceFilter !== "any" ? sourceFilter : undefined,
+    sort: sortBy === "date_posted" ? "date_posted" : undefined,
     enabled: filtersReady,
   });
 
-  const visibleJobs = [...jobs].sort((a, b) => {
-    if (sortByNewest) {
-      return getPostedAtValue(a.postedAt) - getPostedAtValue(b.postedAt);
-    }
-
-    const roleCompare = compareJobsByTargetRoles(
-      a,
-      b,
-      selectedTargetRoles
-    );
-
-    if (roleCompare !== 0) {
-      return roleCompare;
-    }
-
-    return b.matchScore - a.matchScore;
-  });
+  const visibleJobs = jobs;
 
   useEffect(() => {
     if (!user) {
@@ -107,9 +100,15 @@ export default function JobsPage() {
     setCountryFilter(user.countryName || "any");
     setStateFilter(user.stateName || "any");
     setCityFilter(user.cityName || "any");
-    setSelectedWorkModes(workModesFromProfileValue(user.workMode));
+    setSelectedWorkModes(
+      user.workMode && user.workMode !== "any"
+        ? workModesFromProfileValue(user.workMode)
+        : []
+    );
     setSelectedEmploymentTypes(
-      employmentTypesFromProfileValue(user.employmentType)
+      user.employmentType && user.employmentType !== "any"
+        ? employmentTypesFromProfileValue(user.employmentType)
+        : []
     );
     setSelectedWorkRights(workRightsFromProfileValue(user.workRights));
     const profileRoles = targetRolesFromProfileValue(user.targetRoles);
@@ -117,6 +116,12 @@ export default function JobsPage() {
     setSelectedTargetRoles(profileRoles);
     setFiltersReady(true);
   }, [user]);
+
+  useEffect(() => {
+    if (jobs.length > 0) {
+      cacheJobs(jobs);
+    }
+  }, [jobs]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearchQuery(searchInput), 400);
@@ -135,7 +140,9 @@ export default function JobsPage() {
     selectedEmploymentTypes,
     selectedWorkRights,
     selectedTargetRoles,
+    selectedSkills,
     sourceFilter,
+    sortBy,
   ]);
 
   useEffect(() => {
@@ -202,45 +209,26 @@ export default function JobsPage() {
     showToast(wasSaved ? "Job removed from saved" : "Job saved");
   }
 
-  function resetFiltersToProfile() {
-    const defaults = profileDefaults ?? {
-      country: user?.countryName || "any",
-      state: user?.stateName || "any",
-      city: user?.cityName || "any",
-      workMode: user?.workMode || "any",
-      employmentType: user?.employmentType || "any",
-      workRights: user?.workRights || "any",
-      targetRoles: targetRolesFromProfileValue(user?.targetRoles),
-    };
-
-    setCountryFilter(defaults.country);
-    setStateFilter(defaults.state);
-    setCityFilter(defaults.city);
-    setSelectedWorkModes(workModesFromProfileValue(defaults.workMode));
-    setSelectedEmploymentTypes(
-      employmentTypesFromProfileValue(defaults.employmentType)
-    );
-    setSelectedWorkRights(workRightsFromProfileValue(defaults.workRights));
-    const resetRoles =
-      profileDefaults?.targetRoles ??
-      targetRolesFromProfileValue(user?.targetRoles);
-    setTargetRoleOptions(resetRoles);
-    setSelectedTargetRoles(resetRoles);
-    setSourceFilter("any");
-    setSortByNewest(false);
+  function resetFilters() {
+    setSelectedWorkModes([]);
+    setSelectedEmploymentTypes([]);
+    setSelectedTargetRoles([]);
+    setSelectedSkills([]);
+    setTargetRoleOptions(targetRolesFromProfileValue(user?.targetRoles));
+    setSortBy("best_match");
     setCurrentPage(1);
   }
 
   function clearFilters() {
     setSearchInput("");
     setSearchQuery("");
-    resetFiltersToProfile();
+    resetFilters();
   }
 
   async function handleRefreshJobs() {
     setSearchInput("");
     setSearchQuery("");
-    resetFiltersToProfile();
+    resetFilters();
 
     await refreshJobs();
 
@@ -295,6 +283,16 @@ export default function JobsPage() {
       }
 
       return [...current, role];
+    });
+  }
+
+  function handleToggleSkill(skill: string) {
+    setSelectedSkills((current) => {
+      if (current.includes(skill)) {
+        return current.filter((item) => item !== skill);
+      }
+
+      return uniqueSkills([...current, skill]);
     });
   }
 
@@ -363,8 +361,9 @@ export default function JobsPage() {
         selectedWorkRights={selectedWorkRights}
         targetRoleOptions={targetRoleOptions}
         selectedTargetRoles={selectedTargetRoles}
+        skillOptions={user?.skills ?? []}
+        selectedSkills={selectedSkills}
         sourceFilter={sourceFilter}
-        sortByNewest={sortByNewest}
         filterOptions={filterOptions}
         disabled={!filtersReady}
         onCountryChange={handleCountryChange}
@@ -375,9 +374,9 @@ export default function JobsPage() {
         onToggleWorkRights={handleToggleWorkRights}
         onToggleTargetRole={handleToggleTargetRole}
         onAddTargetRole={handleAddTargetRole}
+        onToggleSkill={handleToggleSkill}
         onSourceChange={setSourceFilter}
-        onToggleNewest={() => setSortByNewest((current) => !current)}
-        onReset={resetFiltersToProfile}
+        onReset={resetFilters}
       />
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
@@ -387,10 +386,20 @@ export default function JobsPage() {
               {total} jobs found
             </p>
 
-            <button className="flex items-center gap-2 text-sm font-semibold text-teal-700">
+            <label className="flex items-center gap-2 text-sm font-semibold text-teal-700">
               <Filter className="h-4 w-4" />
-              {sortByNewest ? "Sort by newest" : "Sort by best match"}
-            </button>
+              <select
+                value={sortBy}
+                onChange={(event) =>
+                  setSortBy(event.target.value as JobSortOption)
+                }
+                className="cursor-pointer bg-transparent text-teal-700 outline-none"
+                aria-label="Sort jobs"
+              >
+                <option value="best_match">Sort by best match</option>
+                <option value="date_posted">Sort by date posted</option>
+              </select>
+            </label>
           </div>
 
           {isPageLoading ? (
@@ -398,12 +407,6 @@ export default function JobsPage() {
               <p className="text-sm font-semibold text-slate-600">
                 Loading jobs...
               </p>
-            </div>
-          ) : null}
-
-          {fallbackMessage ? (
-            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-              {fallbackMessage}
             </div>
           ) : null}
 
@@ -417,8 +420,6 @@ export default function JobsPage() {
             <div className="space-y-3">
               {visibleJobs.length > 0 ? (
                 <>
-                  {renderPagination()}
-
                   {visibleJobs.map((job) => (
                     <JobCard
                       key={job.id}
@@ -456,23 +457,28 @@ export default function JobsPage() {
 
               <div className="mt-4 space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Skills & experience</span>
-                  <span className="font-semibold text-slate-950">45%</span>
+                  <span className="text-slate-500">Base relevance</span>
+                  <span className="font-semibold text-slate-950">30 pts</span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Job preferences</span>
-                  <span className="font-semibold text-slate-950">30%</span>
+                  <span className="text-slate-500">Location</span>
+                  <span className="font-semibold text-slate-950">up to 25</span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Location & work type</span>
-                  <span className="font-semibold text-slate-950">15%</span>
+                  <span className="text-slate-500">Work mode</span>
+                  <span className="font-semibold text-slate-950">up to 20</span>
                 </div>
 
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Recency</span>
-                  <span className="font-semibold text-slate-950">10%</span>
+                  <span className="text-slate-500">Skills match</span>
+                  <span className="font-semibold text-slate-950">up to 20</span>
+                </div>
+
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Employment + work rights</span>
+                  <span className="font-semibold text-slate-950">up to 25</span>
                 </div>
               </div>
             </CardContent>
@@ -518,9 +524,12 @@ export default function JobsPage() {
                 accurate job recommendations.
               </p>
 
-              <Button className="mt-4 h-10 rounded-xl bg-teal-600 hover:bg-teal-700">
+              <Link
+                href="/profile"
+                className="mt-4 inline-flex h-10 items-center justify-center rounded-xl bg-teal-600 px-4 text-sm font-semibold text-white transition hover:bg-teal-700"
+              >
                 Complete profile
-              </Button>
+              </Link>
             </CardContent>
           </Card>
         </aside>

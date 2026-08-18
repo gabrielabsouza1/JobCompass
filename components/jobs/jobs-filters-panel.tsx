@@ -7,6 +7,7 @@ import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import type { JobsFilterOptions } from "@/lib/jobs/extract-filter-options";
 import {
   ALL_EMPLOYMENT_TYPE_VALUES,
+  ALL_WORK_MODE_VALUES,
   ALL_WORK_RIGHTS_VALUES,
   formatLocationFilterLabel,
   getCitiesForState,
@@ -14,6 +15,7 @@ import {
   getStatesForCountry,
   getWorkModeLabel,
   getWorkRightsLabel,
+  hasRestrictiveMultiSelection,
 } from "@/lib/jobs/extract-filter-options";
 import { Input } from "@/components/ui/input";
 
@@ -33,8 +35,9 @@ type JobsFiltersPanelProps = {
   selectedWorkRights: string[];
   targetRoleOptions: string[];
   selectedTargetRoles: string[];
+  skillOptions: string[];
+  selectedSkills: string[];
   sourceFilter: string;
-  sortByNewest: boolean;
   filterOptions: JobsFilterOptions | null;
   disabled?: boolean;
   onCountryChange: (value: string) => void;
@@ -45,8 +48,8 @@ type JobsFiltersPanelProps = {
   onToggleWorkRights: (workRight: string) => void;
   onToggleTargetRole: (role: string) => void;
   onAddTargetRole: (role: string) => void;
+  onToggleSkill: (skill: string) => void;
   onSourceChange: (value: string) => void;
-  onToggleNewest: () => void;
   onReset: () => void;
 };
 
@@ -145,8 +148,9 @@ export function JobsFiltersPanel({
   selectedWorkRights,
   targetRoleOptions,
   selectedTargetRoles,
+  skillOptions,
+  selectedSkills,
   sourceFilter,
-  sortByNewest,
   filterOptions,
   disabled,
   onCountryChange,
@@ -157,8 +161,8 @@ export function JobsFiltersPanel({
   onToggleWorkRights,
   onToggleTargetRole,
   onAddTargetRole,
+  onToggleSkill,
   onSourceChange,
-  onToggleNewest,
   onReset,
 }: JobsFiltersPanelProps) {
   const [showAllFilters, setShowAllFilters] = useState(false);
@@ -260,6 +264,18 @@ export function JobsFiltersPanel({
     : "Location";
 
   const sourceActive = sourceFilter !== "any";
+  const showWorkModePills = hasRestrictiveMultiSelection(
+    selectedWorkModes,
+    ALL_WORK_MODE_VALUES
+  );
+  const showEmploymentPills = hasRestrictiveMultiSelection(
+    selectedEmploymentTypes,
+    ALL_EMPLOYMENT_TYPE_VALUES
+  );
+  const showWorkRightsPills = hasRestrictiveMultiSelection(
+    selectedWorkRights,
+    ALL_WORK_RIGHTS_VALUES
+  );
 
   return (
     <>
@@ -288,32 +304,38 @@ export function JobsFiltersPanel({
               </ActivePill>
             ) : null}
 
-            {selectedWorkModes.map((mode) => (
-              <ActivePill
-                key={mode}
-                onClick={() => onToggleWorkMode(mode)}
-              >
-                {getWorkModeLabel(mode)}
-              </ActivePill>
-            ))}
+            {showWorkModePills
+              ? selectedWorkModes.map((mode) => (
+                  <ActivePill
+                    key={mode}
+                    onClick={() => onToggleWorkMode(mode)}
+                  >
+                    {getWorkModeLabel(mode)}
+                  </ActivePill>
+                ))
+              : null}
 
-            {selectedEmploymentTypes.map((type) => (
-              <ActivePill
-                key={type}
-                onClick={() => onToggleEmploymentType(type)}
-              >
-                {getEmploymentTypeLabel(type)}
-              </ActivePill>
-            ))}
+            {showEmploymentPills
+              ? selectedEmploymentTypes.map((type) => (
+                  <ActivePill
+                    key={type}
+                    onClick={() => onToggleEmploymentType(type)}
+                  >
+                    {getEmploymentTypeLabel(type)}
+                  </ActivePill>
+                ))
+              : null}
 
-            {selectedWorkRights.map((workRight) => (
-              <ActivePill
-                key={workRight}
-                onClick={() => onToggleWorkRights(workRight)}
-              >
-                {getWorkRightsLabel(workRight)}
-              </ActivePill>
-            ))}
+            {showWorkRightsPills
+              ? selectedWorkRights.map((workRight) => (
+                  <ActivePill
+                    key={workRight}
+                    onClick={() => onToggleWorkRights(workRight)}
+                  >
+                    {getWorkRightsLabel(workRight)}
+                  </ActivePill>
+                ))
+              : null}
 
             {selectedTargetRoles.map((role) => (
               <ActivePill key={role} onClick={() => onToggleTargetRole(role)}>
@@ -325,10 +347,6 @@ export function JobsFiltersPanel({
               <ActivePill onClick={() => setShowAllFilters(true)}>
                 {sourceFilter}
               </ActivePill>
-            ) : null}
-
-            {sortByNewest ? (
-              <ActivePill onClick={onToggleNewest}>Newest</ActivePill>
             ) : null}
           </div>
 
@@ -510,6 +528,26 @@ export function JobsFiltersPanel({
                 </div>
               </div>
 
+              {skillOptions.length > 0 ? (
+                <div className="border-t border-slate-100 pt-4">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Your skills
+                  </p>
+
+                  <div className="flex flex-wrap gap-2">
+                    {skillOptions.map((skill) => (
+                      <TogglePill
+                        key={skill}
+                        label={skill}
+                        active={selectedSkills.includes(skill)}
+                        onClick={() => onToggleSkill(skill)}
+                        disabled={disabled}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
                   Source
@@ -528,18 +566,6 @@ export function JobsFiltersPanel({
                   ))}
                 </select>
               </label>
-
-              <button
-                type="button"
-                onClick={onToggleNewest}
-                disabled={disabled}
-                className={`inline-flex h-9 items-center rounded-full px-4 text-sm font-semibold transition ${sortByNewest
-                  ? "bg-teal-700 text-white"
-                  : "border border-slate-300 bg-white text-slate-700 hover:bg-teal-50"
-                  }`}
-              >
-                Newest first
-              </button>
             </div>
 
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">

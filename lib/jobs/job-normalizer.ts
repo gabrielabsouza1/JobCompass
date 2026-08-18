@@ -18,6 +18,8 @@ type RawJobInput = {
   postedAt?: string;
   matchScore?: number;
   skills?: string[];
+  matchedProfileSkills?: string[];
+  missingProfileSkills?: string[];
   description: string;
   url: string;
   workRightsRisk?: "Low" | "Medium" | "High";
@@ -52,6 +54,8 @@ export function normalizeJob(rawJob: RawJobInput): Job {
     postedAt: rawJob.postedAt ?? "Recently",
     matchScore: rawJob.matchScore ?? 0,
     skills: rawJob.skills ?? [],
+    matchedProfileSkills: rawJob.matchedProfileSkills ?? [],
+    missingProfileSkills: rawJob.missingProfileSkills ?? [],
     description: rawJob.description,
     url: rawJob.url,
     workRightsRisk: rawJob.workRightsRisk ?? "Low",

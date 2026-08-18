@@ -6,6 +6,7 @@ import {
   MapPin,
 } from "lucide-react";
 import {
+  formatPostedAt,
   formatSalary,
   getRiskColor,
   getWorkModeColor,
@@ -85,7 +86,35 @@ export function JobCard({ job, isSaved, onToggleSave }: JobCardProps) {
                 >
                   {job.workRightsRisk} work rights risk
                 </Badge>
+
+                {(job.matchedProfileSkills ?? []).slice(0, 3).map((skill) => (
+                  <Badge
+                    key={skill}
+                    className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    {skill}
+                  </Badge>
+                ))}
+
+                {(job.matchedProfileSkills?.length ?? 0) > 3 ? (
+                  <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
+                    +{(job.matchedProfileSkills?.length ?? 0) - 3} skills
+                  </Badge>
+                ) : null}
               </div>
+
+              {(job.skills?.length ?? 0) > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {job.skills.slice(0, 4).map((skill) => (
+                    <Badge
+                      key={skill}
+                      className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600 hover:bg-slate-100"
+                    >
+                      {skill}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -95,7 +124,7 @@ export function JobCard({ job, isSaved, onToggleSave }: JobCardProps) {
                 {formatSalary(job.salaryMin, job.salaryMax)}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                Posted {job.postedAt}
+                Posted {formatPostedAt(job.postedAt)}
               </p>
             </div>
 

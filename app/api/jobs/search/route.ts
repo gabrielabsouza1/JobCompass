@@ -2,21 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
 import { buildAdzunaWhatFromQueryAndRoles } from "@/lib/jobs/build-adzuna-search-query";
-import { calculateMatchScore } from "@/lib/jobs/calculate-match-score";
 import {
-  employmentTypesFromProfileValue,
-  isJobCompatibleWithWorkRight,
-  parseEmploymentTypeFilter,
-  parseWorkModeFilter,
-  parseWorkRightsFilter,
-  jobEmploymentTypeToFilterValue,
   buildAdzunaWhereFromFilters,
   buildProfileFilterDefaults,
   extractFilterOptionsFromJobs,
   mergeFilterOptions,
+  parseWorkModeFilter,
 } from "@/lib/jobs/extract-filter-options";
-import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
+import { buildFilteredJobPage } from "@/lib/jobs/filtered-job-catalog";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
+import {
+  parseSkillsFromProfile,
+} from "@/lib/profile/skills";
 import { targetRolesFromProfileValue } from "@/lib/profile/target-roles";
 import {
   getAdzunaCodeFromCountryName,
@@ -93,7 +90,11 @@ export async function GET(request: NextRequest) {
   const employmentType = searchParams.get("employmentType");
   const workRights = searchParams.get("workRights");
   const targetRolesParam = searchParams.get("targetRoles");
+  const skillsParam = searchParams.get("skills");
   const source = searchParams.get("source");
+  const sortParam = searchParams.get("sort");
+  const sortBy =
+    sortParam === "date_posted" ? "date_posted" : "best_match";
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
   const perPage = Math.min(
     50,
@@ -107,7 +108,7 @@ export async function GET(request: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select(
-      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
+      "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills"
     )
     .eq("id", user.id)
     .single();
@@ -115,15 +116,15 @@ export async function GET(request: NextRequest) {
   let resolvedProfile = profile;
 
   if (profileError) {
-    const missingTargetRolesColumn =
-      profileError.message?.includes("target_roles") ||
-      profileError.details?.includes("target_roles");
+    const missingSkillsColumn =
+      profileError.message?.includes("skills") ||
+      profileError.details?.includes("skills");
 
-    if (missingTargetRolesColumn) {
+    if (missingSkillsColumn) {
       const { data: fallbackProfile, error: fallbackError } = await supabase
         .from("profiles")
         .select(
-          "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights"
+          "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, target_roles"
         )
         .eq("id", user.id)
         .single();
@@ -139,15 +140,43 @@ export async function GET(request: NextRequest) {
 
       resolvedProfile = {
         ...fallbackProfile,
-        target_roles: [],
+        skills: [],
       };
     } else {
-      console.error(profileError);
+      const missingTargetRolesColumn =
+        profileError.message?.includes("target_roles") ||
+        profileError.details?.includes("target_roles");
 
-      return NextResponse.json(
-        { error: "Could not load user profile" },
-        { status: 500 }
-      );
+      if (missingTargetRolesColumn) {
+        const { data: fallbackProfile, error: fallbackError } = await supabase
+          .from("profiles")
+          .select(
+            "country_code, country_name, state_name, city_name, work_mode, employment_type, work_rights, skills"
+          )
+          .eq("id", user.id)
+          .single();
+
+        if (fallbackError) {
+          console.error(fallbackError);
+
+          return NextResponse.json(
+            { error: "Could not load user profile" },
+            { status: 500 }
+          );
+        }
+
+        resolvedProfile = {
+          ...fallbackProfile,
+          target_roles: [],
+        };
+      } else {
+        console.error(profileError);
+
+        return NextResponse.json(
+          { error: "Could not load user profile" },
+          { status: 500 }
+        );
+      }
     }
   }
 
@@ -177,29 +206,66 @@ export async function GET(request: NextRequest) {
   const adzunaCountryCode = resolveAdzunaCountryCode(country, profileCountryCode);
   const profileDefaults = buildProfileFilterDefaults(resolvedProfile);
 
+  const hasTargetRolesParam = searchParams.has("targetRoles");
   const profileTargetRoles = targetRolesFromProfileValue(
     resolvedProfile.target_roles
   );
-  const activeTargetRoles =
-    targetRolesParam
-      ? targetRolesParam
-          .split("|")
-          .map((role) => role.trim())
-          .filter(Boolean)
-      : profileTargetRoles;
+  const activeTargetRoles = hasTargetRolesParam
+    ? (targetRolesParam ?? "")
+        .split("|")
+        .map((role) => role.trim())
+        .filter(Boolean)
+    : profileTargetRoles;
 
-  const { jobs: adzunaJobs, total: adzunaTotal } = await searchAdzunaJobs(
-    adzunaCountryCode,
-    {
-      query,
-      targetRoles: activeTargetRoles,
-      country,
-      state,
-      city,
-      workMode,
-      page,
-      perPage,
-    }
+  const hasSkillsParam = searchParams.has("skills");
+  const activeSkills = hasSkillsParam
+    ? (skillsParam ?? "")
+        .split("|")
+        .map((skill) => skill.trim())
+        .filter(Boolean)
+    : [];
+
+  const adzunaSearchFilters = {
+    query,
+    targetRoles: activeTargetRoles,
+    country,
+    state,
+    city,
+    workMode,
+  };
+
+  const jobFilterOptions = {
+    selectedSourceIds,
+    source,
+    workMode,
+    employmentType,
+    workRights,
+    skills: activeSkills,
+  };
+
+  const profileMatchContext = {
+    countryName: resolvedProfile.country_name ?? "",
+    stateName: resolvedProfile.state_name ?? "",
+    cityName: resolvedProfile.city_name ?? "",
+    workMode: resolvedProfile.work_mode ?? "",
+    employmentType: resolvedProfile.employment_type ?? "",
+    workRights: resolvedProfile.work_rights ?? "",
+    skills: parseSkillsFromProfile(resolvedProfile.skills),
+  };
+
+  const catalogPage = await buildFilteredJobPage(
+    (adzunaPage, batchSize) =>
+      searchAdzunaJobs(adzunaCountryCode, {
+        ...adzunaSearchFilters,
+        page: adzunaPage,
+        perPage: batchSize,
+      }),
+    jobFilterOptions,
+    profileMatchContext,
+    activeTargetRoles,
+    page,
+    perPage,
+    sortBy
   );
 
   const { jobs: sampleJobs } = await searchAdzunaJobs(adzunaCountryCode, {
@@ -230,80 +296,12 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const sourceFilteredJobs = adzunaJobs.filter((job) =>
-    selectedSourceIds.some((sourceId) =>
-      job.source.toLowerCase().includes(sourceId.toLowerCase())
-    )
-  );
-
-  const sourceScopedJobs =
-    source && source !== "any"
-      ? sourceFilteredJobs.filter(
-          (job) => job.source.toLowerCase() === source.toLowerCase()
-        )
-      : sourceFilteredJobs;
-
-  const visibleJobs = sourceScopedJobs.filter((job) => {
-    const workModeFilters = parseWorkModeFilter(workMode ?? "");
-
-    const matchesWorkMode =
-      workModeFilters.length === 0 ||
-      workModeFilters.includes(job.workMode.toLowerCase());
-
-    const employmentFilters = parseEmploymentTypeFilter(employmentType ?? "");
-
-    const matchesEmploymentType =
-      employmentFilters.length === 0 ||
-      employmentFilters.includes(
-        jobEmploymentTypeToFilterValue(job.employmentType)
-      );
-
-    const workRightsFilters = parseWorkRightsFilter(workRights ?? "");
-
-    const matchesWorkRights =
-      workRightsFilters.length === 0 ||
-      workRightsFilters.some((workRight) =>
-        isJobCompatibleWithWorkRight(job, workRight)
-      );
-
-    return matchesWorkMode && matchesEmploymentType && matchesWorkRights;
-  });
-
-  const matchedJobs = visibleJobs
-    .map((job) => ({
-      ...job,
-      matchScore: calculateMatchScore(job, {
-        countryName: resolvedProfile.country_name ?? "",
-        stateName: resolvedProfile.state_name ?? "",
-        cityName: resolvedProfile.city_name ?? "",
-        workMode: resolvedProfile.work_mode ?? "",
-        employmentType: resolvedProfile.employment_type ?? "",
-        workRights: resolvedProfile.work_rights ?? "",
-      }),
-    }))
-    .sort((left, right) => {
-      const roleCompare = compareJobsByTargetRoles(
-        left,
-        right,
-        activeTargetRoles
-      );
-
-      if (roleCompare !== 0) {
-        return roleCompare;
-      }
-
-      return right.matchScore - left.matchScore;
-    });
-
-  const totalPages = Math.ceil(adzunaTotal / perPage);
-
   return NextResponse.json({
-    jobs: matchedJobs,
-    total: adzunaTotal,
-    page,
-    perPage,
-    totalPages,
-    fallbackMessage: "",
+    jobs: catalogPage.jobs,
+    total: catalogPage.total,
+    page: catalogPage.page,
+    perPage: catalogPage.perPage,
+    totalPages: catalogPage.totalPages,
     defaults: profileDefaults,
     filters: filterOptions,
   });
