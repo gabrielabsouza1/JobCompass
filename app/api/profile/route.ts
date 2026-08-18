@@ -19,10 +19,18 @@ type ProfileUpdateBody = {
   workRights?: string;
   targetRoles?: string[];
   skills?: string[];
+  onboardingCompleted?: boolean;
+  clearResume?: boolean;
 };
 
 const PROFILE_SELECT_FULL =
-  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills";
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, resume_path, resume_filename, resume_uploaded_at, onboarding_completed_at";
+
+const PROFILE_SELECT_WITHOUT_RESUME =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, onboarding_completed_at";
+
+const PROFILE_SELECT_WITHOUT_ONBOARDING =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, resume_path, resume_filename, resume_uploaded_at";
 
 const PROFILE_SELECT_WITHOUT_SKILLS =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles";
@@ -33,7 +41,7 @@ const PROFILE_SELECT_WITHOUT_TARGET_ROLES =
 export const dynamic = "force-dynamic";
 
 function buildProfileUpdate(body: ProfileUpdateBody) {
-  const update: Record<string, string | string[]> = {};
+  const update: Record<string, string | string[] | null> = {};
 
   if (body.fullName !== undefined) {
     update.full_name = body.fullName.trim();
@@ -79,6 +87,16 @@ function buildProfileUpdate(body: ProfileUpdateBody) {
     update.skills = uniqueSkills(body.skills);
   }
 
+  if (body.onboardingCompleted === true) {
+    update.onboarding_completed_at = new Date().toISOString();
+  }
+
+  if (body.clearResume === true) {
+    update.resume_path = "";
+    update.resume_filename = "";
+    update.resume_uploaded_at = null;
+  }
+
   return update;
 }
 
@@ -107,6 +125,12 @@ function mapProfileRow(
     workRights: (profile?.work_rights as string | undefined) ?? "",
     targetRoles: parseTargetRolesFromProfile(profile?.target_roles),
     skills: parseSkillsFromProfile(profile?.skills),
+    resumePath: (profile?.resume_path as string | undefined) ?? "",
+    resumeFilename: (profile?.resume_filename as string | undefined) ?? "",
+    resumeUploadedAt:
+      (profile?.resume_uploaded_at as string | undefined) ?? null,
+    onboardingCompletedAt:
+      (profile?.onboarding_completed_at as string | undefined) ?? null,
   };
 }
 
@@ -127,6 +151,31 @@ async function loadProfileForUser(userId: string, authEmail: string) {
 
   if (!error) {
     return mapProfileRow(profile, authEmail);
+  }
+
+  if (
+    isMissingColumnError(error, "resume_path") ||
+    isMissingColumnError(error, "onboarding_completed_at")
+  ) {
+    const { data: fallbackProfile, error: fallbackError } = await supabase
+      .from("profiles")
+      .select(PROFILE_SELECT_WITHOUT_RESUME)
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (fallbackError) {
+      throw fallbackError;
+    }
+
+    return mapProfileRow(
+      {
+        ...fallbackProfile,
+        resume_path: "",
+        resume_filename: "",
+        resume_uploaded_at: null,
+      },
+      authEmail
+    );
   }
 
   if (isMissingColumnError(error, "skills")) {
@@ -235,6 +284,48 @@ export async function PATCH(request: NextRequest) {
     .maybeSingle();
 
   if (updateError) {
+    const missingResumeColumn =
+      isMissingColumnError(updateError, "resume_path") ||
+      isMissingColumnError(updateError, "onboarding_completed_at");
+
+    if (missingResumeColumn) {
+      const {
+        resume_path: resumePath,
+        resume_filename: resumeFilename,
+        resume_uploaded_at: resumeUploadedAt,
+        onboarding_completed_at: onboardingCompletedAt,
+        ...rest
+      } = updatePayload;
+
+      if (Object.keys(rest).length > 0) {
+        const { data: partialProfile, error: partialError } = await supabase
+          .from("profiles")
+          .update(rest)
+          .eq("id", user.id)
+          .select(PROFILE_SELECT_WITHOUT_RESUME)
+          .maybeSingle();
+
+        if (partialError) {
+          console.error(partialError);
+
+          return NextResponse.json({ error: partialError.message }, { status: 500 });
+        }
+
+        if (partialProfile) {
+          return NextResponse.json({
+            profile: mapProfileRow(partialProfile, user.email ?? ""),
+            warning:
+              "Resume and onboarding fields are missing. Run the resume/onboarding migration in Supabase.",
+          });
+        }
+      }
+
+      return NextResponse.json({
+        error:
+          "Resume and onboarding columns are missing. Run the resume/onboarding migration in Supabase.",
+      }, { status: 400 });
+    }
+
     const missingSkillsColumn = isMissingColumnError(updateError, "skills");
 
     if (missingSkillsColumn && updatePayload.skills) {

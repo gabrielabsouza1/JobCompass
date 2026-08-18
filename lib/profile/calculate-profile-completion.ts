@@ -6,6 +6,8 @@ type ProfileCompletionInput = {
   workRights?: string;
   targetRoles?: string[];
   skills?: string[];
+  resumePath?: string;
+  resumeFilename?: string;
 };
 
 type CompletionItem = {
@@ -39,12 +41,17 @@ export function getProfileCompletionItems(profile: ProfileCompletionInput) {
     {
       label: "Target roles",
       complete: (profile.targetRoles?.length ?? 0) > 0,
-      weight: 20,
+      weight: 15,
     },
     {
       label: "Skills",
       complete: (profile.skills?.length ?? 0) >= 3,
-      weight: 20,
+      weight: 15,
+    },
+    {
+      label: "Resume",
+      complete: Boolean(profile.resumePath || profile.resumeFilename),
+      weight: 10,
     },
   ];
 
