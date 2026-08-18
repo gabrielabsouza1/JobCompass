@@ -8,6 +8,7 @@ import {
   Bookmark,
   BriefcaseBusiness,
   Building2,
+  ClipboardCheck,
   ExternalLink,
   MapPin,
   ShieldAlert,
@@ -25,6 +26,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { useApplicationTracker } from "@/hooks/use-application-tracker";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import { AppToast } from "@/components/ui/app-toast";
@@ -34,6 +36,7 @@ import type { Job } from "@/types";
 export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const { isJobSaved, toggleSavedJob } = useSavedJobs();
+  const { trackJob } = useApplicationTracker();
   const { toastMessage, showToast } = useToast();
   const { user } = useCurrentUser();
   const [job, setJob] = useState<Job | null>(null);
@@ -101,12 +104,34 @@ export default function JobDetailPage() {
     };
   }, [params.id]);
 
-  function handleToggleSavedJob(jobId: string) {
-    const wasSaved = isJobSaved(jobId);
+  async function handleToggleSavedJob() {
+    if (!job) {
+      return;
+    }
 
-    toggleSavedJob(jobId);
+    const wasSaved = isJobSaved(job.id);
+
+    await toggleSavedJob(job.id, job);
 
     showToast(wasSaved ? "Job removed from saved" : "Job saved");
+  }
+
+  async function handleTrackJob() {
+    if (!job) {
+      return;
+    }
+
+    if (!isJobSaved(job.id)) {
+      await toggleSavedJob(job.id, job);
+    }
+
+    const tracked = await trackJob(job);
+
+    if (tracked) {
+      showToast("Added to tracker");
+    } else {
+      showToast("Could not add to tracker");
+    }
   }
 
   if (isLoading) {
@@ -217,11 +242,25 @@ export default function JobDetailPage() {
                 <div className="flex flex-col gap-3 sm:flex-row lg:flex-col">
                   <Button
                     type="button"
-                    onClick={() => handleToggleSavedJob(job.id)}
+                    onClick={() => {
+                      void handleToggleSavedJob();
+                    }}
                     className="h-11 rounded-2xl bg-teal-600 hover:bg-teal-700"
                   >
                     <Bookmark className="mr-2 h-4 w-4" />
                     {isJobSaved(job.id) ? "Saved" : "Save job"}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 rounded-2xl border-slate-200"
+                    onClick={() => {
+                      void handleTrackJob();
+                    }}
+                  >
+                    <ClipboardCheck className="mr-2 h-4 w-4" />
+                    Track application
                   </Button>
 
                   <Button

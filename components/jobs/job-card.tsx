@@ -27,8 +27,6 @@ export function JobCard({ job, isSaved, onToggleSave }: JobCardProps) {
     <Card className="relative rounded-3xl border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-md">
       <Link
         href={`/jobs/${job.id}`}
-        target="_blank"
-        rel="noopener noreferrer"
         className="absolute inset-0 z-10 rounded-3xl"
         aria-label={`Open ${job.title} job details`}
       />

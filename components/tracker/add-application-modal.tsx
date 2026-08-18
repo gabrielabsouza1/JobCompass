@@ -36,7 +36,7 @@ export function AddApplicationModal({
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <p className="mb-2 inline-flex rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-700">
-              Mock form
+              Application tracker
             </p>
 
             <h2 className="text-2xl font-bold text-slate-950">
@@ -44,7 +44,7 @@ export function AddApplicationModal({
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              This form is UI-only for now. Later it will save to your tracker.
+              Track a saved job and move it through your application pipeline.
             </p>
           </div>
 
@@ -72,8 +72,12 @@ export function AddApplicationModal({
                   jobId: event.target.value,
                 }))
               }
-              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50"
+              disabled={jobs.length === 0}
+              className="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-50 disabled:cursor-not-allowed disabled:bg-slate-50"
             >
+              {jobs.length === 0 ? (
+                <option value="">Save a job first</option>
+              ) : null}
               {jobs.map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.title} · {job.company}
