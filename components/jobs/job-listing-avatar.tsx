@@ -1,15 +1,23 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import type { Job } from "@/types";
+import { cn } from "@/lib/utils";
 
 const ADZUNA_LOGO_SRC = "/images/adzuna-logo.png";
+const DEFAULT_CONTAINER_CLASS =
+  "h-16 w-16 shrink-0 rounded-2xl border border-slate-200 bg-white";
 
 type JobListingAvatarProps = {
   job: Job;
   imageClassName?: string;
 };
+
+function isLocalImage(url: string) {
+  return url.startsWith("/");
+}
 
 export function JobListingAvatar({
   job,
@@ -66,21 +74,30 @@ export function JobListingAvatar({
       ? (job.companyLogoUrl ?? fetchedLogoUrl)!
       : ADZUNA_LOGO_SRC;
 
-  return (
-    <img
-      src={resolvedLogoUrl}
-      alt=""
-      className={
-        imageClassName ??
-        "h-16 w-16 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-2"
-      }
-      onError={() => {
-        if (resolvedLogoUrl === ADZUNA_LOGO_SRC) {
-          return;
-        }
+  const usesCompactPadding = imageClassName?.includes("h-12");
 
-        setCompanyLogoFailed(true);
-      }}
-    />
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden",
+        imageClassName ?? DEFAULT_CONTAINER_CLASS
+      )}
+    >
+      <Image
+        src={resolvedLogoUrl}
+        alt=""
+        fill
+        sizes="64px"
+        unoptimized={!isLocalImage(resolvedLogoUrl)}
+        className={cn("object-contain", usesCompactPadding ? "p-1.5" : "p-2")}
+        onError={() => {
+          if (resolvedLogoUrl === ADZUNA_LOGO_SRC) {
+            return;
+          }
+
+          setCompanyLogoFailed(true);
+        }}
+      />
+    </div>
   );
 }
