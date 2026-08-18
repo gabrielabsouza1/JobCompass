@@ -30,10 +30,11 @@ import {
 } from "@/lib/location-api";
 import { AppShell } from "@/components/layout/app-shell";
 import { SkillAutocompleteInput } from "@/components/profile/skill-autocomplete-input";
+import { ResumeUploadCard } from "@/components/profile/resume-upload-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { useCurrentUser } from "@/hooks/use-current-user";
+import { useCurrentUser, type ProfileSnapshot } from "@/hooks/use-current-user";
 import { suggestNextSkill } from "@/data/skill-suggestions";
 import { calculateProfileCompletion } from "@/lib/profile/calculate-profile-completion";
 import {
@@ -110,7 +111,10 @@ export default function ProfilePage() {
     workRights: user?.workRights,
     targetRoles: user?.targetRoles,
     skills: user?.skills,
+    resumePath: user?.resumePath,
+    resumeFilename: user?.resumeFilename,
   });
+  const hasResume = Boolean(user?.resumeFilename || user?.resumePath);
 
   useEffect(() => {
     let isMounted = true;
@@ -371,20 +375,7 @@ export default function ProfilePage() {
     const data = (await response.json()) as {
       error?: string;
       savedTargetRoles?: boolean;
-      profile?: {
-        fullName: string;
-        email: string;
-        countryCode: string;
-        countryName: string;
-        stateCode: string;
-        stateName: string;
-        cityName: string;
-        workMode: string;
-        employmentType: string;
-        workRights: string;
-        targetRoles: string[];
-        skills: string[];
-      };
+      profile?: ProfileSnapshot;
     };
 
     if (!response.ok) {
@@ -644,30 +635,62 @@ export default function ProfilePage() {
                 Later, JobCompass can use your resume to improve job matching.
               </p>
 
-              <div className="mt-5 rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6">
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-700">
-                      <FileText className="h-6 w-6" />
-                    </div>
+              <div className="mt-5">
+                <ResumeUploadCard
+                  resumeFilename={user?.resumeFilename}
+                  resumeUploadedAt={user?.resumeUploadedAt}
+                  onUploaded={(payload) => {
+                    if (!user) {
+                      return;
+                    }
 
-                    <div>
-                      <p className="font-semibold text-slate-950">
-                        Resume not uploaded yet
-                      </p>
-                      <p className="text-sm text-slate-500">
-                        PDF, DOCX or plain text resume support coming soon.
-                      </p>
-                    </div>
-                  </div>
+                    applyProfile({
+                      fullName: user.fullName,
+                      email: user.email,
+                      countryCode: user.countryCode,
+                      countryName: user.countryName,
+                      stateCode: user.stateCode,
+                      stateName: user.stateName,
+                      cityName: user.cityName,
+                      workMode: user.workMode,
+                      employmentType: user.employmentType,
+                      workRights: user.workRights,
+                      targetRoles: user.targetRoles,
+                      skills: user.skills,
+                      resumePath: payload.resumePath,
+                      resumeFilename: payload.resumeFilename,
+                      resumeUploadedAt: payload.resumeUploadedAt,
+                      onboardingCompletedAt: user.onboardingCompletedAt,
+                    });
+                    showToast("Resume uploaded");
+                  }}
+                  onRemoved={() => {
+                    if (!user) {
+                      return;
+                    }
 
-                  <Button
-                    variant="outline"
-                    className="h-11 rounded-2xl border-slate-200 bg-white"
-                  >
-                    Upload resume
-                  </Button>
-                </div>
+                    applyProfile({
+                      fullName: user.fullName,
+                      email: user.email,
+                      countryCode: user.countryCode,
+                      countryName: user.countryName,
+                      stateCode: user.stateCode,
+                      stateName: user.stateName,
+                      cityName: user.cityName,
+                      workMode: user.workMode,
+                      employmentType: user.employmentType,
+                      workRights: user.workRights,
+                      targetRoles: user.targetRoles,
+                      skills: user.skills,
+                      resumePath: "",
+                      resumeFilename: "",
+                      resumeUploadedAt: null,
+                      onboardingCompletedAt: user.onboardingCompletedAt,
+                    });
+                    showToast("Resume removed");
+                  }}
+                  onError={(message) => showToast(message)}
+                />
               </div>
             </CardContent>
           </Card>
@@ -722,13 +745,19 @@ export default function ProfilePage() {
                 </div>
 
                 <div className="flex gap-3">
-                  <div className="mt-0.5 h-5 w-5 rounded-full border-2 border-slate-300" />
+                  {hasResume ? (
+                    <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-600" />
+                  ) : (
+                    <div className="mt-0.5 h-5 w-5 rounded-full border-2 border-slate-300" />
+                  )}
                   <div>
                     <p className="text-sm font-semibold text-slate-950">
                       Resume upload
                     </p>
                     <p className="text-sm text-slate-500">
-                      Improves match accuracy
+                      {hasResume
+                        ? user?.resumeFilename
+                        : "Improves match accuracy"}
                     </p>
                   </div>
                 </div>

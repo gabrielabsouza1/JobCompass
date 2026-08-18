@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import { jobSources } from "@/data/job-sources";
 import { AppShell } from "@/components/layout/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,89 +19,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { AppToast } from "@/components/ui/app-toast";
 import { useJobSources } from "@/hooks/use-job-sources";
 import { useToast } from "@/hooks/use-toast";
-
-const jobSources = [
-  {
-    id: "adzuna",
-    name: "Adzuna",
-    description: "Search Australian jobs directly inside JobCompass.",
-    type: "In-app results",
-    status: "Connected",
-    category: "API",
-    selected: true,
-    recommended: true,
-  },
-  {
-    id: "jooble",
-    name: "Jooble",
-    description: "Aggregated job listings from multiple sources.",
-    type: "In-app results",
-    status: "Connected",
-    category: "API",
-    selected: true,
-    recommended: true,
-  },
-  {
-    id: "remotive",
-    name: "Remotive",
-    description: "Remote-friendly jobs from global companies.",
-    type: "In-app results",
-    status: "Available",
-    category: "API",
-    selected: true,
-    recommended: false,
-  },
-  {
-    id: "seek",
-    name: "SEEK",
-    description: "One of Australia's most popular job platforms.",
-    type: "External smart search",
-    status: "Smart link",
-    category: "External",
-    selected: true,
-    recommended: true,
-  },
-  {
-    id: "linkedin",
-    name: "LinkedIn",
-    description: "Useful for corporate, tech and professional roles.",
-    type: "External smart search",
-    status: "Smart link",
-    category: "External",
-    selected: true,
-    recommended: true,
-  },
-  {
-    id: "indeed",
-    name: "Indeed AU",
-    description: "Large job search engine with broad role coverage.",
-    type: "External smart search",
-    status: "Smart link",
-    category: "External",
-    selected: false,
-    recommended: false,
-  },
-  {
-    id: "jora",
-    name: "Jora",
-    description: "Australian job search platform with local listings.",
-    type: "External smart search",
-    status: "Smart link",
-    category: "External",
-    selected: false,
-    recommended: false,
-  },
-  {
-    id: "workforce",
-    name: "Workforce Australia",
-    description: "Government-backed Australian employment platform.",
-    type: "External smart search",
-    status: "Smart link",
-    category: "External",
-    selected: false,
-    recommended: false,
-  },
-];
 
 function getTypeBadge(type: string) {
   if (type === "In-app results") {

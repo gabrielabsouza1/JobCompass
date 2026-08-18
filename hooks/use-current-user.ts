@@ -21,6 +21,10 @@ type CurrentUser = {
   workRights: string;
   targetRoles: string[];
   skills: string[];
+  resumePath: string;
+  resumeFilename: string;
+  resumeUploadedAt: string | null;
+  onboardingCompletedAt: string | null;
 };
 
 export type ProfileSnapshot = {
@@ -36,6 +40,10 @@ export type ProfileSnapshot = {
   workRights: string;
   targetRoles: string[];
   skills: string[];
+  resumePath: string;
+  resumeFilename: string;
+  resumeUploadedAt: string | null;
+  onboardingCompletedAt: string | null;
 };
 
 type ProfileApiResponse = {
@@ -78,6 +86,10 @@ function mapProfileToUser(
     workRights: profile.workRights,
     targetRoles: parseTargetRolesFromProfile(profile.targetRoles),
     skills: parseSkillsFromProfile(profile.skills),
+    resumePath: profile.resumePath ?? "",
+    resumeFilename: profile.resumeFilename ?? "",
+    resumeUploadedAt: profile.resumeUploadedAt ?? null,
+    onboardingCompletedAt: profile.onboardingCompletedAt ?? null,
   };
 }
 
@@ -133,7 +145,26 @@ export function useCurrentUser() {
 
       if (!response.ok || !data.profile) {
         console.error(data.error ?? "Could not load profile");
-        setUser(null);
+        setUser(
+          mapProfileToUser(authUser.id, authUser.email ?? "", {
+            fullName: "",
+            email: authUser.email ?? "",
+            countryCode: "",
+            countryName: "",
+            stateCode: "",
+            stateName: "",
+            cityName: "",
+            workMode: "",
+            employmentType: "",
+            workRights: "",
+            targetRoles: [],
+            skills: [],
+            resumePath: "",
+            resumeFilename: "",
+            resumeUploadedAt: null,
+            onboardingCompletedAt: null,
+          })
+        );
         setIsLoadingUser(false);
         return;
       }

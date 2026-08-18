@@ -37,6 +37,8 @@ export function AppSidebar() {
     workRights: user?.workRights,
     targetRoles: user?.targetRoles,
     skills: user?.skills,
+    resumePath: user?.resumePath,
+    resumeFilename: user?.resumeFilename,
   });
 
   return (

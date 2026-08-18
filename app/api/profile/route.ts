@@ -19,10 +19,18 @@ type ProfileUpdateBody = {
   workRights?: string;
   targetRoles?: string[];
   skills?: string[];
+  onboardingCompleted?: boolean;
+  clearResume?: boolean;
 };
 
 const PROFILE_SELECT_FULL =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, resume_path, resume_filename, resume_uploaded_at, onboarding_completed_at";
+
+const PROFILE_SELECT_LEGACY =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills";
+
+const PROFILE_SELECT_WITHOUT_RESUME =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, onboarding_completed_at";
 
 const PROFILE_SELECT_WITHOUT_SKILLS =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles";
@@ -30,10 +38,22 @@ const PROFILE_SELECT_WITHOUT_SKILLS =
 const PROFILE_SELECT_WITHOUT_TARGET_ROLES =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights";
 
+const PROFILE_SELECT_BASE =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights";
+
+const PROFILE_SELECT_VARIANTS: string[] = [
+  PROFILE_SELECT_FULL,
+  PROFILE_SELECT_WITHOUT_RESUME,
+  PROFILE_SELECT_LEGACY,
+  PROFILE_SELECT_WITHOUT_SKILLS,
+  PROFILE_SELECT_WITHOUT_TARGET_ROLES,
+  PROFILE_SELECT_BASE,
+];
+
 export const dynamic = "force-dynamic";
 
 function buildProfileUpdate(body: ProfileUpdateBody) {
-  const update: Record<string, string | string[]> = {};
+  const update: Record<string, string | string[] | null> = {};
 
   if (body.fullName !== undefined) {
     update.full_name = body.fullName.trim();
@@ -79,6 +99,16 @@ function buildProfileUpdate(body: ProfileUpdateBody) {
     update.skills = uniqueSkills(body.skills);
   }
 
+  if (body.onboardingCompleted === true) {
+    update.onboarding_completed_at = new Date().toISOString();
+  }
+
+  if (body.clearResume === true) {
+    update.resume_path = "";
+    update.resume_filename = "";
+    update.resume_uploaded_at = null;
+  }
+
   return update;
 }
 
@@ -107,6 +137,12 @@ function mapProfileRow(
     workRights: (profile?.work_rights as string | undefined) ?? "",
     targetRoles: parseTargetRolesFromProfile(profile?.target_roles),
     skills: parseSkillsFromProfile(profile?.skills),
+    resumePath: (profile?.resume_path as string | undefined) ?? "",
+    resumeFilename: (profile?.resume_filename as string | undefined) ?? "",
+    resumeUploadedAt:
+      (profile?.resume_uploaded_at as string | undefined) ?? null,
+    onboardingCompletedAt:
+      (profile?.onboarding_completed_at as string | undefined) ?? null,
   };
 }
 
@@ -116,61 +152,84 @@ function isMissingColumnError(error: { message?: string; details?: string }, col
   );
 }
 
+function looksLikeMissingColumnError(error: { message?: string; details?: string }) {
+  const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+
+  return (
+    message.includes("column") ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
+  );
+}
+
 async function loadProfileForUser(userId: string, authEmail: string) {
   const supabase = await createClient();
+  let lastError: { message?: string; details?: string } | null = null;
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select(PROFILE_SELECT_FULL)
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!error) {
-    return mapProfileRow(profile, authEmail);
-  }
-
-  if (isMissingColumnError(error, "skills")) {
-    const { data: fallbackProfile, error: fallbackError } = await supabase
+  for (const select of PROFILE_SELECT_VARIANTS) {
+    const { data: profile, error } = await supabase
       .from("profiles")
-      .select(PROFILE_SELECT_WITHOUT_SKILLS)
+      .select(select)
       .eq("id", userId)
       .maybeSingle();
 
-    if (fallbackError) {
-      throw fallbackError;
+    if (!error) {
+      return mapProfileRow(
+        profile as Record<string, unknown> | null,
+        authEmail
+      );
     }
 
-    return mapProfileRow(
-      {
-        ...fallbackProfile,
-        skills: [],
-      },
-      authEmail
-    );
-  }
+    lastError = error;
 
-  if (isMissingColumnError(error, "target_roles")) {
-    const { data: fallbackProfile, error: fallbackError } = await supabase
-      .from("profiles")
-      .select(PROFILE_SELECT_WITHOUT_TARGET_ROLES)
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (fallbackError) {
-      throw fallbackError;
+    if (!looksLikeMissingColumnError(error)) {
+      throw error;
     }
-
-    return mapProfileRow(
-      {
-        ...fallbackProfile,
-        target_roles: [],
-        skills: [],
-      },
-      authEmail
-    );
   }
 
-  throw error;
+  throw lastError ?? new Error("Could not load profile");
+}
+
+function enrichProfileFromUpdate(
+  profile: ReturnType<typeof mapProfileRow>,
+  updatePayload: Record<string, string | string[] | null>,
+  body: ProfileUpdateBody
+) {
+  const enriched = { ...profile };
+
+  if (
+    body.onboardingCompleted === true &&
+    !enriched.onboardingCompletedAt &&
+    typeof updatePayload.onboarding_completed_at === "string"
+  ) {
+    enriched.onboardingCompletedAt = updatePayload.onboarding_completed_at;
+  }
+
+  if (body.clearResume === true) {
+    enriched.resumePath = "";
+    enriched.resumeFilename = "";
+    enriched.resumeUploadedAt = null;
+  }
+
+  return enriched;
+}
+
+async function buildProfileResponseAfterUpdate(
+  userId: string,
+  authEmail: string,
+  updatePayload: Record<string, string | string[] | null>,
+  body: ProfileUpdateBody,
+  previousSkills: string[]
+) {
+  const profile = await loadProfileForUser(userId, authEmail);
+  const enrichedProfile = enrichProfileFromUpdate(profile, updatePayload, body);
+
+  if (updatePayload.skills) {
+    const addedSkills = getNewlyAddedSkills(previousSkills, enrichedProfile.skills);
+    await recordSkillUsage(addedSkills);
+  }
+
+  return enrichedProfile;
 }
 
 export async function GET() {
@@ -231,10 +290,52 @@ export async function PATCH(request: NextRequest) {
     .from("profiles")
     .update(updatePayload)
     .eq("id", user.id)
-    .select(PROFILE_SELECT_FULL)
+    .select(PROFILE_SELECT_LEGACY)
     .maybeSingle();
 
   if (updateError) {
+    const missingResumeColumn =
+      isMissingColumnError(updateError, "resume_path") ||
+      isMissingColumnError(updateError, "onboarding_completed_at");
+
+    if (missingResumeColumn) {
+      const {
+        resume_path: resumePath,
+        resume_filename: resumeFilename,
+        resume_uploaded_at: resumeUploadedAt,
+        onboarding_completed_at: onboardingCompletedAt,
+        ...rest
+      } = updatePayload;
+
+      if (Object.keys(rest).length > 0) {
+        const { data: partialProfile, error: partialError } = await supabase
+          .from("profiles")
+          .update(rest)
+          .eq("id", user.id)
+          .select(PROFILE_SELECT_LEGACY)
+          .maybeSingle();
+
+        if (partialError) {
+          console.error(partialError);
+
+          return NextResponse.json({ error: partialError.message }, { status: 500 });
+        }
+
+        if (partialProfile) {
+          return NextResponse.json({
+            profile: mapProfileRow(partialProfile, user.email ?? ""),
+            warning:
+              "Resume and onboarding fields are missing. Run the resume/onboarding migration in Supabase.",
+          });
+        }
+      }
+
+      return NextResponse.json({
+        error:
+          "Resume and onboarding columns are missing. Run the resume/onboarding migration in Supabase.",
+      }, { status: 400 });
+    }
+
     const missingSkillsColumn = isMissingColumnError(updateError, "skills");
 
     if (missingSkillsColumn && updatePayload.skills) {
@@ -291,15 +392,27 @@ export async function PATCH(request: NextRequest) {
   }
 
   if (updatedProfile) {
-    if (updatePayload.skills) {
-      const nextSkills = parseSkillsFromProfile(updatedProfile.skills);
-      const addedSkills = getNewlyAddedSkills(previousSkills, nextSkills);
-      await recordSkillUsage(addedSkills);
-    }
+    try {
+      const profile = await buildProfileResponseAfterUpdate(
+        user.id,
+        user.email ?? "",
+        updatePayload,
+        body,
+        previousSkills
+      );
 
-    return NextResponse.json({
-      profile: mapProfileRow(updatedProfile, user.email ?? ""),
-    });
+      return NextResponse.json({ profile });
+    } catch (reloadError) {
+      console.error(reloadError);
+
+      return NextResponse.json({
+        profile: enrichProfileFromUpdate(
+          mapProfileRow(updatedProfile as Record<string, unknown>, user.email ?? ""),
+          updatePayload,
+          body
+        ),
+      });
+    }
   }
 
   const { count, error: countError } = await supabase
@@ -315,12 +428,13 @@ export async function PATCH(request: NextRequest) {
 
   if (count && count > 0) {
     try {
-      const profile = await loadProfileForUser(user.id, user.email ?? "");
-
-      if (updatePayload.skills) {
-        const addedSkills = getNewlyAddedSkills(previousSkills, profile.skills);
-        await recordSkillUsage(addedSkills);
-      }
+      const profile = await buildProfileResponseAfterUpdate(
+        user.id,
+        user.email ?? "",
+        updatePayload,
+        body,
+        previousSkills
+      );
 
       return NextResponse.json({ profile });
     } catch (reloadError) {
@@ -340,7 +454,7 @@ export async function PATCH(request: NextRequest) {
       email: user.email ?? "",
       ...updatePayload,
     })
-    .select(PROFILE_SELECT_FULL)
+    .select(PROFILE_SELECT_LEGACY)
     .maybeSingle();
 
   if (insertError) {
@@ -365,7 +479,25 @@ export async function PATCH(request: NextRequest) {
     await recordSkillUsage(addedSkills);
   }
 
+  try {
+    const profile = await buildProfileResponseAfterUpdate(
+      user.id,
+      user.email ?? "",
+      updatePayload,
+      body,
+      previousSkills
+    );
+
+    return NextResponse.json({ profile });
+  } catch (reloadError) {
+    console.error(reloadError);
+  }
+
   return NextResponse.json({
-    profile: mapProfileRow(insertedProfile, user.email ?? ""),
+    profile: enrichProfileFromUpdate(
+      mapProfileRow(insertedProfile as Record<string, unknown>, user.email ?? ""),
+      updatePayload,
+      body
+    ),
   });
 }
