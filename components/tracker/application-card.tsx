@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import type { Job, ApplicationStatus } from "@/types";
-import type { MockApplication } from "@/data/mock-applications";
+import type { Application } from "@/types/application";
 import { formatSalary } from "@/lib/job-utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -17,7 +17,7 @@ const STATUS_OPTIONS: ApplicationStatus[] = [
 
 type ApplicationCardProps = {
   job: Job;
-  application: MockApplication;
+  application: Application;
   onStatusChange?: (applicationId: string, status: ApplicationStatus) => void;
 };
 

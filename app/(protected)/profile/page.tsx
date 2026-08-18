@@ -5,7 +5,6 @@ import {
   BadgeCheck,
   BriefcaseBusiness,
   CheckCircle2,
-  FileText,
   Globe2,
   GraduationCap,
   MapPin,
@@ -632,13 +631,16 @@ export default function ProfilePage() {
               </h2>
 
               <p className="mt-1 text-sm text-slate-500">
-                Later, JobCompass can use your resume to improve job matching.
+                Upload your resume and JobCompass can suggest skills and target
+                roles for your profile.
               </p>
 
               <div className="mt-5">
                 <ResumeUploadCard
                   resumeFilename={user?.resumeFilename}
                   resumeUploadedAt={user?.resumeUploadedAt}
+                  currentSkills={user?.skills ?? []}
+                  currentTargetRoles={user?.targetRoles ?? []}
                   onUploaded={(payload) => {
                     if (!user) {
                       return;
@@ -663,6 +665,31 @@ export default function ProfilePage() {
                       onboardingCompletedAt: user.onboardingCompletedAt,
                     });
                     showToast("Resume uploaded");
+                  }}
+                  onProfileUpdated={(payload) => {
+                    if (!user) {
+                      return;
+                    }
+
+                    applyProfile({
+                      fullName: user.fullName,
+                      email: user.email,
+                      countryCode: user.countryCode,
+                      countryName: user.countryName,
+                      stateCode: user.stateCode,
+                      stateName: user.stateName,
+                      cityName: user.cityName,
+                      workMode: user.workMode,
+                      employmentType: user.employmentType,
+                      workRights: user.workRights,
+                      targetRoles: payload.targetRoles,
+                      skills: payload.skills,
+                      resumePath: user.resumePath,
+                      resumeFilename: user.resumeFilename,
+                      resumeUploadedAt: user.resumeUploadedAt,
+                      onboardingCompletedAt: user.onboardingCompletedAt,
+                    });
+                    showToast("Profile updated from resume");
                   }}
                   onRemoved={() => {
                     if (!user) {

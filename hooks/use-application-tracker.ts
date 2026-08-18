@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { MockApplication } from "@/data/mock-applications";
+import type { Application } from "@/types/application";
 import { useApplications } from "@/hooks/use-applications";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import {
@@ -22,7 +22,7 @@ import {
 
 type ApplicationItem = {
   job: Job;
-  application: MockApplication;
+  application: Application;
 };
 
 export function useApplicationTracker() {
@@ -36,28 +36,22 @@ export function useApplicationTracker() {
   );
 
   const [newApplication, setNewApplication] = useState({
-    jobId: trackerJobs[0]?.id ?? "",
+    jobId: "",
     status: "Applied" as ApplicationStatus,
     nextStep: "",
     notes: "",
   });
 
-  useEffect(() => {
-    if (trackerJobs.length === 0) {
-      return;
-    }
+  const resolvedJobId =
+    newApplication.jobId &&
+    trackerJobs.some((job) => job.id === newApplication.jobId)
+      ? newApplication.jobId
+      : (trackerJobs[0]?.id ?? "");
 
-    setNewApplication((current) => {
-      if (current.jobId && trackerJobs.some((job) => job.id === current.jobId)) {
-        return current;
-      }
-
-      return {
-        ...current,
-        jobId: trackerJobs[0]?.id ?? "",
-      };
-    });
-  }, [trackerJobs]);
+  const resolvedNewApplication = {
+    ...newApplication,
+    jobId: resolvedJobId,
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -198,17 +192,17 @@ export function useApplicationTracker() {
   async function handleAddApplication() {
     const created = await addApplication({
       id: `app-${Date.now()}`,
-      jobId: newApplication.jobId,
-      status: newApplication.status,
+      jobId: resolvedNewApplication.jobId,
+      status: resolvedNewApplication.status,
       appliedAt:
-        newApplication.status === "Applied" ||
-        newApplication.status === "Interview" ||
-        newApplication.status === "Offer"
+        resolvedNewApplication.status === "Applied" ||
+        resolvedNewApplication.status === "Interview" ||
+        resolvedNewApplication.status === "Offer"
           ? new Date().toISOString().slice(0, 10)
           : undefined,
       nextStep:
-        newApplication.nextStep.trim() || "Review this application later.",
-      notes: newApplication.notes.trim() || undefined,
+        resolvedNewApplication.nextStep.trim() || "Review this application later.",
+      notes: resolvedNewApplication.notes.trim() || undefined,
     });
 
     if (!created) {
@@ -257,7 +251,7 @@ export function useApplicationTracker() {
 
   return {
     jobs: trackerJobs,
-    newApplication,
+    newApplication: resolvedNewApplication,
     setNewApplication,
     applicationColumns,
     totalApplications,

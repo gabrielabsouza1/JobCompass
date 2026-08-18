@@ -46,7 +46,7 @@ export function OnboardingRedirect({
         return needsOnboarding(profile);
       }
 
-      let activeProfile = {
+      const activeProfile = {
         fullName: user!.fullName,
         email: user!.email,
         countryCode: user!.countryCode,

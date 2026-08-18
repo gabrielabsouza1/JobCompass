@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   BriefcaseBusiness,
   ClipboardCheck,
-  Globe2,
   Home,
   UserCircle,
   Settings

@@ -27,24 +27,24 @@ export const JOB_SOURCE_REGISTRY: JobSourceMeta[] = [
   {
     id: "jooble",
     name: "Jooble",
-    description: "Aggregated job listings — coming in a future release.",
+    description: "Aggregated Australian job listings shown inside JobCompass.",
     type: "In-app results",
-    status: "Coming soon",
+    status: "Connected",
     category: "API",
-    integration: "planned",
-    recommended: false,
-    selectable: false,
+    integration: "in_app",
+    recommended: true,
+    selectable: true,
   },
   {
     id: "remotive",
     name: "Remotive",
-    description: "Remote-friendly jobs — coming in a future release.",
+    description: "Remote-friendly jobs from global companies, shown inside JobCompass.",
     type: "In-app results",
-    status: "Coming soon",
+    status: "Connected",
     category: "API",
-    integration: "planned",
-    recommended: false,
-    selectable: false,
+    integration: "in_app",
+    recommended: true,
+    selectable: true,
   },
   {
     id: "seek",
@@ -103,7 +103,13 @@ export const JOB_SOURCE_REGISTRY: JobSourceMeta[] = [
   },
 ];
 
-export const DEFAULT_SELECTED_SOURCE_IDS = ["adzuna", "seek", "linkedin"];
+export const DEFAULT_SELECTED_SOURCE_IDS = [
+  "adzuna",
+  "jooble",
+  "remotive",
+  "seek",
+  "linkedin",
+];
 
 const IN_APP_SOURCE_IDS = new Set(
   JOB_SOURCE_REGISTRY.filter((source) => source.integration === "in_app").map(
@@ -117,6 +123,15 @@ export function getJobSourceById(sourceId: string) {
 
 export function getSelectedInAppSourceIds(selectedSourceIds: string[]) {
   return selectedSourceIds.filter((sourceId) => IN_APP_SOURCE_IDS.has(sourceId));
+}
+
+export function isInAppSourceEnabled(
+  selectedSourceIds: string[],
+  sourceId: string
+) {
+  return (
+    IN_APP_SOURCE_IDS.has(sourceId) && selectedSourceIds.includes(sourceId)
+  );
 }
 
 export function getSelectedSmartLinkSources(selectedSourceIds: string[]) {

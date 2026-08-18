@@ -14,7 +14,7 @@ export function TopJobCard({ job }: TopJobCardProps) {
         <div className="mb-4 flex items-center justify-between">
           <JobListingAvatar
             job={job}
-            imageClassName="h-12 w-12 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-1.5"
+            imageClassName="h-12 w-12 shrink-0 rounded-2xl border border-slate-200 bg-white"
           />
 
           <Badge className="rounded-full bg-emerald-50 text-emerald-700 hover:bg-emerald-50">

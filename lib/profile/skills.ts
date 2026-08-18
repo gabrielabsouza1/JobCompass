@@ -47,7 +47,3 @@ export function parseSkillsFromProfile(value: unknown) {
 export function serializeSkillsFilter(skills: string[]) {
   return uniqueSkills(skills).join("|");
 }
-
-export function skillsFromProfileValue(value?: string[] | null) {
-  return parseSkillsFromProfile(value);
-}

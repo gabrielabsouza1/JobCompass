@@ -52,6 +52,15 @@ const PROFILE_SELECT_VARIANTS: string[] = [
 
 export const dynamic = "force-dynamic";
 
+function omitProfileFields(
+  updatePayload: Record<string, string | string[] | null>,
+  keys: string[]
+) {
+  return Object.fromEntries(
+    Object.entries(updatePayload).filter(([key]) => !keys.includes(key))
+  ) as Record<string, string | string[] | null>;
+}
+
 function buildProfileUpdate(body: ProfileUpdateBody) {
   const update: Record<string, string | string[] | null> = {};
 
@@ -299,13 +308,12 @@ export async function PATCH(request: NextRequest) {
       isMissingColumnError(updateError, "onboarding_completed_at");
 
     if (missingResumeColumn) {
-      const {
-        resume_path: resumePath,
-        resume_filename: resumeFilename,
-        resume_uploaded_at: resumeUploadedAt,
-        onboarding_completed_at: onboardingCompletedAt,
-        ...rest
-      } = updatePayload;
+      const rest = omitProfileFields(updatePayload, [
+        "resume_path",
+        "resume_filename",
+        "resume_uploaded_at",
+        "onboarding_completed_at",
+      ]);
 
       if (Object.keys(rest).length > 0) {
         const { data: partialProfile, error: partialError } = await supabase
@@ -339,7 +347,7 @@ export async function PATCH(request: NextRequest) {
     const missingSkillsColumn = isMissingColumnError(updateError, "skills");
 
     if (missingSkillsColumn && updatePayload.skills) {
-      const { skills: skillsPayload, ...rest } = updatePayload;
+      const rest = omitProfileFields(updatePayload, ["skills"]);
 
       if (Object.keys(rest).length > 0) {
         const { error: partialError } = await supabase
@@ -364,7 +372,7 @@ export async function PATCH(request: NextRequest) {
     const missingTargetRolesColumn = isMissingColumnError(updateError, "target_roles");
 
     if (missingTargetRolesColumn && updatePayload.target_roles) {
-      const { target_roles: targetRoles, ...rest } = updatePayload;
+      const rest = omitProfileFields(updatePayload, ["target_roles"]);
 
       if (Object.keys(rest).length > 0) {
         const { error: partialError } = await supabase

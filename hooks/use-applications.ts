@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { createClient } from "@/lib/supabase/client";
-import type { MockApplication } from "@/data/mock-applications";
+import type { Application } from "@/types/application";
 import type { ApplicationStatus } from "@/types";
 
 type ApplicationRow = {
@@ -15,7 +15,7 @@ type ApplicationRow = {
   applied_at: string | null;
 };
 
-function mapApplicationFromDatabase(row: ApplicationRow): MockApplication {
+function mapApplicationFromDatabase(row: ApplicationRow): Application {
   return {
     id: row.id,
     jobId: row.job_id,
@@ -27,7 +27,7 @@ function mapApplicationFromDatabase(row: ApplicationRow): MockApplication {
 }
 
 export function useApplications() {
-  const [applications, setApplications] = useState<MockApplication[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
   const [isLoadingApplications, setIsLoadingApplications] = useState(true);
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export function useApplications() {
     };
   }, []);
 
-  async function addApplication(application: MockApplication) {
+  async function addApplication(application: Application) {
     const supabase = createClient();
 
     const {
@@ -117,7 +117,7 @@ export function useApplications() {
   async function updateApplication(
     applicationId: string,
     updates: Partial<
-      Pick<MockApplication, "status" | "nextStep" | "notes" | "appliedAt">
+      Pick<Application, "status" | "nextStep" | "notes" | "appliedAt">
     >
   ) {
     const supabase = createClient();

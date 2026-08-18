@@ -1,34 +1,42 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 
 import type { Job } from "@/types";
+import { cn } from "@/lib/utils";
 
 const ADZUNA_LOGO_SRC = "/images/adzuna-logo.png";
+const DEFAULT_CONTAINER_CLASS =
+  "h-16 w-16 shrink-0 rounded-2xl border border-slate-200 bg-white";
 
 type JobListingAvatarProps = {
   job: Job;
   imageClassName?: string;
 };
 
+function isLocalImage(url: string) {
+  return url.startsWith("/");
+}
+
 export function JobListingAvatar({
   job,
   imageClassName,
 }: JobListingAvatarProps) {
-  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(
+  const [fetchedLogoUrl, setFetchedLogoUrl] = useState<string | null>(null);
+  const [companyLogoFailed, setCompanyLogoFailed] = useState(false);
+  const [trackedCompanyLogoUrl, setTrackedCompanyLogoUrl] = useState(
     job.companyLogoUrl ?? null
   );
-  const [companyLogoFailed, setCompanyLogoFailed] = useState(false);
+
+  if ((job.companyLogoUrl ?? null) !== trackedCompanyLogoUrl) {
+    setTrackedCompanyLogoUrl(job.companyLogoUrl ?? null);
+    setFetchedLogoUrl(null);
+    setCompanyLogoFailed(false);
+  }
 
   useEffect(() => {
-    if (job.companyLogoUrl) {
-      setCompanyLogoUrl(job.companyLogoUrl);
-      setCompanyLogoFailed(false);
-      return;
-    }
-
-    if (!job.url.includes("adzuna")) {
-      setCompanyLogoUrl(null);
+    if (job.companyLogoUrl || !job.url.includes("adzuna")) {
       return;
     }
 
@@ -46,7 +54,7 @@ export function JobListingAvatar({
         const data = (await response.json()) as { url?: string | null };
 
         if (!cancelled && data.url) {
-          setCompanyLogoUrl(data.url);
+          setFetchedLogoUrl(data.url);
           setCompanyLogoFailed(false);
         }
       } catch {
@@ -62,23 +70,34 @@ export function JobListingAvatar({
   }, [job.companyLogoUrl, job.id, job.url]);
 
   const resolvedLogoUrl =
-    companyLogoUrl && !companyLogoFailed ? companyLogoUrl : ADZUNA_LOGO_SRC;
+    (job.companyLogoUrl ?? fetchedLogoUrl) && !companyLogoFailed
+      ? (job.companyLogoUrl ?? fetchedLogoUrl)!
+      : ADZUNA_LOGO_SRC;
+
+  const usesCompactPadding = imageClassName?.includes("h-12");
 
   return (
-    <img
-      src={resolvedLogoUrl}
-      alt=""
-      className={
-        imageClassName ??
-        "h-16 w-16 shrink-0 rounded-2xl border border-slate-200 bg-white object-contain p-2"
-      }
-      onError={() => {
-        if (resolvedLogoUrl === ADZUNA_LOGO_SRC) {
-          return;
-        }
+    <div
+      className={cn(
+        "relative overflow-hidden",
+        imageClassName ?? DEFAULT_CONTAINER_CLASS
+      )}
+    >
+      <Image
+        src={resolvedLogoUrl}
+        alt=""
+        fill
+        sizes="64px"
+        unoptimized={!isLocalImage(resolvedLogoUrl)}
+        className={cn("object-contain", usesCompactPadding ? "p-1.5" : "p-2")}
+        onError={() => {
+          if (resolvedLogoUrl === ADZUNA_LOGO_SRC) {
+            return;
+          }
 
-        setCompanyLogoFailed(true);
-      }}
-    />
+          setCompanyLogoFailed(true);
+        }}
+      />
+    </div>
   );
 }

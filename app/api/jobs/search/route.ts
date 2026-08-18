@@ -12,6 +12,11 @@ import {
 import { buildFilteredJobPage } from "@/lib/jobs/filtered-job-catalog";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
 import {
+  buildJoobleLocationFromFilters,
+  getJoobleJobs,
+} from "@/lib/jobs/providers/jooble-provider";
+import { getRemotiveJobs } from "@/lib/jobs/providers/remotive-provider";
+import {
   parseSkillsFromProfile,
 } from "@/lib/profile/skills";
 import { targetRolesFromProfileValue } from "@/lib/profile/target-roles";
@@ -19,7 +24,8 @@ import {
   getAdzunaCodeFromCountryName,
   getAdzunaCountryByName,
 } from "@/lib/jobs/adzuna-countries";
-import { jobMatchesSelectedInAppSources } from "@/lib/jobs/source-registry";
+import { jobMatchesSelectedInAppSources, isInAppSourceEnabled } from "@/lib/jobs/source-registry";
+import type { Job } from "@/types";
 
 async function searchAdzunaJobs(
   countryCode: string,
@@ -255,13 +261,52 @@ export async function GET(request: NextRequest) {
     skills: parseSkillsFromProfile(resolvedProfile.skills),
   };
 
+  const adzunaEnabled = isInAppSourceEnabled(selectedSourceIds, "adzuna");
+  const joobleEnabled = isInAppSourceEnabled(selectedSourceIds, "jooble");
+  const remotiveEnabled = isInAppSourceEnabled(selectedSourceIds, "remotive");
+
+  const joobleLocation = buildJoobleLocationFromFilters({
+    country,
+    state,
+    city,
+    fallbackCountryName: resolvedProfile.country_name,
+  });
+
+  const prefetchedJobsPromises: Promise<Job[]>[] = [];
+
+  if (joobleEnabled) {
+    prefetchedJobsPromises.push(
+      getJoobleJobs({
+        keywords: query,
+        location: joobleLocation,
+        countryCode: profileCountryCode,
+      }).then((result) => result.jobs)
+    );
+  }
+
+  if (remotiveEnabled) {
+    prefetchedJobsPromises.push(
+      getRemotiveJobs({
+        search: query,
+        limit: 500,
+      }).then((result) => result.jobs)
+    );
+  }
+
+  const prefetchedJobs = (
+    await Promise.all(prefetchedJobsPromises)
+  ).flat();
+
   const catalogPage = await buildFilteredJobPage(
-    (adzunaPage, batchSize) =>
-      searchAdzunaJobs(adzunaCountryCode, {
-        ...adzunaSearchFilters,
-        page: adzunaPage,
-        perPage: batchSize,
-      }),
+    adzunaEnabled
+      ? (adzunaPage, batchSize) =>
+          searchAdzunaJobs(adzunaCountryCode, {
+            ...adzunaSearchFilters,
+            page: adzunaPage,
+            perPage: batchSize,
+          })
+      : null,
+    prefetchedJobs,
     jobFilterOptions,
     profileMatchContext,
     rankingTargetRoles,
@@ -270,15 +315,36 @@ export async function GET(request: NextRequest) {
     sortBy
   );
 
-  const { jobs: sampleJobs } = await searchAdzunaJobs(adzunaCountryCode, {
-    query: "",
-    country: null,
-    state: null,
-    city: null,
-    workMode: null,
-    page: 1,
-    perPage: 50,
-  });
+  const sampleJobs: Awaited<ReturnType<typeof searchAdzunaJobs>>["jobs"] = [];
+
+  if (adzunaEnabled) {
+    const { jobs } = await searchAdzunaJobs(adzunaCountryCode, {
+      query: "",
+      country: null,
+      state: null,
+      city: null,
+      workMode: null,
+      page: 1,
+      perPage: 50,
+    });
+
+    sampleJobs.push(...jobs);
+  }
+
+  if (joobleEnabled) {
+    const { jobs } = await getJoobleJobs({
+      location: joobleLocation,
+      countryCode: profileCountryCode,
+      maxPages: 1,
+    });
+
+    sampleJobs.push(...jobs);
+  }
+
+  if (remotiveEnabled) {
+    const { jobs } = await getRemotiveJobs({ limit: 50 });
+    sampleJobs.push(...jobs);
+  }
 
   const sampleAfterSources = sampleJobs.filter((job) =>
     jobMatchesSelectedInAppSources(job.source, selectedSourceIds)

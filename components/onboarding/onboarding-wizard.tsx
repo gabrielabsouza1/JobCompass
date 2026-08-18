@@ -81,7 +81,7 @@ const steps = [
   {
     id: "resume",
     title: "Upload your resume",
-    description: "Optional — improves future matching features.",
+    description: "Optional — we can suggest skills and target roles from it.",
     icon: FileText,
   },
 ] as const;
@@ -110,12 +110,12 @@ export function OnboardingWizard() {
   const [states, setStates] = useState<StateOption[]>([]);
   const [cities, setCities] = useState<CityOption[]>([]);
   const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+  const [initializedForUser, setInitializedForUser] = useState<string | null>(
+    null
+  );
 
-  useEffect(() => {
-    if (!user) {
-      return;
-    }
-
+  if (user && initializedForUser !== user.email) {
+    setInitializedForUser(user.email);
     setCountryCode(user.countryCode);
     setCountryName(user.countryName);
     setStateCode(user.stateCode);
@@ -126,7 +126,7 @@ export function OnboardingWizard() {
     setWorkRights(user.workRights);
     setTargetRoles(user.targetRoles);
     setSkills(user.skills);
-  }, [user]);
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -770,6 +770,8 @@ export function OnboardingWizard() {
               <ResumeUploadCard
                 resumeFilename={user?.resumeFilename}
                 resumeUploadedAt={user?.resumeUploadedAt}
+                currentSkills={user?.skills ?? []}
+                currentTargetRoles={user?.targetRoles ?? []}
                 onUploaded={(payload) => {
                   if (!user) {
                     return;
@@ -780,6 +782,17 @@ export function OnboardingWizard() {
                     resumePath: payload.resumePath,
                     resumeFilename: payload.resumeFilename,
                     resumeUploadedAt: payload.resumeUploadedAt,
+                  });
+                }}
+                onProfileUpdated={(payload) => {
+                  if (!user) {
+                    return;
+                  }
+
+                  applyProfile({
+                    ...user,
+                    skills: payload.skills,
+                    targetRoles: payload.targetRoles,
                   });
                 }}
                 onRemoved={() => {

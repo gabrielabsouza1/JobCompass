@@ -6,6 +6,8 @@ import {
   getJobSkillMatchDetails,
 } from "@/lib/jobs/calculate-match-score";
 import { getAdzunaJobById } from "@/lib/jobs/providers/adzuna-provider";
+import { getJoobleJobById } from "@/lib/jobs/providers/jooble-provider";
+import { getRemotiveJobById } from "@/lib/jobs/providers/remotive-provider";
 import { parseSkillsFromProfile } from "@/lib/profile/skills";
 import { createClient } from "@/lib/supabase/server";
 
@@ -31,7 +33,14 @@ export async function GET(
     .eq("id", user.id)
     .maybeSingle();
 
-  const job = await getAdzunaJobById(id, profile?.country_code || "AU");
+  const job = id.startsWith("remotive-")
+    ? await getRemotiveJobById(id)
+    : id.startsWith("jooble-")
+      ? await getJoobleJobById(id, {
+          countryCode: profile?.country_code || "AU",
+          location: profile?.city_name || profile?.state_name || profile?.country_name || "Australia",
+        })
+      : await getAdzunaJobById(id, profile?.country_code || "AU");
 
   if (!job) {
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
