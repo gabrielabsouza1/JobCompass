@@ -145,7 +145,26 @@ export function useCurrentUser() {
 
       if (!response.ok || !data.profile) {
         console.error(data.error ?? "Could not load profile");
-        setUser(null);
+        setUser(
+          mapProfileToUser(authUser.id, authUser.email ?? "", {
+            fullName: "",
+            email: authUser.email ?? "",
+            countryCode: "",
+            countryName: "",
+            stateCode: "",
+            stateName: "",
+            cityName: "",
+            workMode: "",
+            employmentType: "",
+            workRights: "",
+            targetRoles: [],
+            skills: [],
+            resumePath: "",
+            resumeFilename: "",
+            resumeUploadedAt: null,
+            onboardingCompletedAt: null,
+          })
+        );
         setIsLoadingUser(false);
         return;
       }

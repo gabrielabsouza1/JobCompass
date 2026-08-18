@@ -26,17 +26,28 @@ type ProfileUpdateBody = {
 const PROFILE_SELECT_FULL =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, resume_path, resume_filename, resume_uploaded_at, onboarding_completed_at";
 
+const PROFILE_SELECT_LEGACY =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills";
+
 const PROFILE_SELECT_WITHOUT_RESUME =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, onboarding_completed_at";
-
-const PROFILE_SELECT_WITHOUT_ONBOARDING =
-  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles, skills, resume_path, resume_filename, resume_uploaded_at";
 
 const PROFILE_SELECT_WITHOUT_SKILLS =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights, target_roles";
 
 const PROFILE_SELECT_WITHOUT_TARGET_ROLES =
   "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights";
+
+const PROFILE_SELECT_BASE =
+  "full_name, email, country_code, country_name, state_code, state_name, city_name, work_mode, employment_type, work_rights";
+
+const PROFILE_SELECT_VARIANTS: string[] = [
+  PROFILE_SELECT_FULL,
+  PROFILE_SELECT_LEGACY,
+  PROFILE_SELECT_WITHOUT_SKILLS,
+  PROFILE_SELECT_WITHOUT_TARGET_ROLES,
+  PROFILE_SELECT_BASE,
+];
 
 export const dynamic = "force-dynamic";
 
@@ -140,86 +151,42 @@ function isMissingColumnError(error: { message?: string; details?: string }, col
   );
 }
 
+function looksLikeMissingColumnError(error: { message?: string; details?: string }) {
+  const message = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
+
+  return (
+    message.includes("column") ||
+    message.includes("does not exist") ||
+    message.includes("could not find")
+  );
+}
+
 async function loadProfileForUser(userId: string, authEmail: string) {
   const supabase = await createClient();
+  let lastError: { message?: string; details?: string } | null = null;
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select(PROFILE_SELECT_FULL)
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (!error) {
-    return mapProfileRow(profile, authEmail);
-  }
-
-  if (
-    isMissingColumnError(error, "resume_path") ||
-    isMissingColumnError(error, "onboarding_completed_at")
-  ) {
-    const { data: fallbackProfile, error: fallbackError } = await supabase
+  for (const select of PROFILE_SELECT_VARIANTS) {
+    const { data: profile, error } = await supabase
       .from("profiles")
-      .select(PROFILE_SELECT_WITHOUT_RESUME)
+      .select(select)
       .eq("id", userId)
       .maybeSingle();
 
-    if (fallbackError) {
-      throw fallbackError;
+    if (!error) {
+      return mapProfileRow(
+        profile as Record<string, unknown> | null,
+        authEmail
+      );
     }
 
-    return mapProfileRow(
-      {
-        ...fallbackProfile,
-        resume_path: "",
-        resume_filename: "",
-        resume_uploaded_at: null,
-      },
-      authEmail
-    );
-  }
+    lastError = error;
 
-  if (isMissingColumnError(error, "skills")) {
-    const { data: fallbackProfile, error: fallbackError } = await supabase
-      .from("profiles")
-      .select(PROFILE_SELECT_WITHOUT_SKILLS)
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (fallbackError) {
-      throw fallbackError;
+    if (!looksLikeMissingColumnError(error)) {
+      throw error;
     }
-
-    return mapProfileRow(
-      {
-        ...fallbackProfile,
-        skills: [],
-      },
-      authEmail
-    );
   }
 
-  if (isMissingColumnError(error, "target_roles")) {
-    const { data: fallbackProfile, error: fallbackError } = await supabase
-      .from("profiles")
-      .select(PROFILE_SELECT_WITHOUT_TARGET_ROLES)
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (fallbackError) {
-      throw fallbackError;
-    }
-
-    return mapProfileRow(
-      {
-        ...fallbackProfile,
-        target_roles: [],
-        skills: [],
-      },
-      authEmail
-    );
-  }
-
-  throw error;
+  throw lastError ?? new Error("Could not load profile");
 }
 
 export async function GET() {
@@ -280,7 +247,7 @@ export async function PATCH(request: NextRequest) {
     .from("profiles")
     .update(updatePayload)
     .eq("id", user.id)
-    .select(PROFILE_SELECT_FULL)
+    .select(PROFILE_SELECT_LEGACY)
     .maybeSingle();
 
   if (updateError) {
@@ -302,7 +269,7 @@ export async function PATCH(request: NextRequest) {
           .from("profiles")
           .update(rest)
           .eq("id", user.id)
-          .select(PROFILE_SELECT_WITHOUT_RESUME)
+          .select(PROFILE_SELECT_LEGACY)
           .maybeSingle();
 
         if (partialError) {
@@ -431,7 +398,7 @@ export async function PATCH(request: NextRequest) {
       email: user.email ?? "",
       ...updatePayload,
     })
-    .select(PROFILE_SELECT_FULL)
+    .select(PROFILE_SELECT_LEGACY)
     .maybeSingle();
 
   if (insertError) {
