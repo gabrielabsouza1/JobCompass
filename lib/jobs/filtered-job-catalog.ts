@@ -9,7 +9,7 @@ import { jobMatchesSearchFilters } from "@/lib/jobs/extract-filter-options";
 import { compareJobsByTargetRoles } from "@/lib/jobs/target-role-matching";
 
 const ADZUNA_BATCH_SIZE = 50;
-const MAX_ADZUNA_BATCHES = 100;
+const MAX_ADZUNA_BATCHES = 8;
 
 type ProfileMatchContext = {
   countryName: string;
@@ -28,6 +28,7 @@ type JobSearchFilterOptions = {
   employmentType?: string | null;
   workRights?: string | null;
   skills?: string[];
+  targetRoles?: string[];
 };
 
 type FetchAdzunaBatch = (
@@ -98,8 +99,10 @@ export async function buildFilteredJobPage(
   let adzunaPage = 1;
   let scannedAll = false;
   let scannedRaw = 0;
+  const neededJobs = page * perPage;
+  const maxBatches = Math.min(MAX_ADZUNA_BATCHES, Math.max(2, page + 1));
 
-  while (adzunaPage <= MAX_ADZUNA_BATCHES) {
+  while (adzunaPage <= maxBatches) {
     const { jobs, total } = await fetchBatch(adzunaPage, ADZUNA_BATCH_SIZE);
     adzunaTotal = total;
 
@@ -130,6 +133,10 @@ export async function buildFilteredJobPage(
 
       seenJobIds.add(job.id);
       catalog.push(job);
+    }
+
+    if (catalog.length >= neededJobs) {
+      break;
     }
 
     if (scannedRaw >= total) {

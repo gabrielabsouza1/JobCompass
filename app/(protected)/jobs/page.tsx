@@ -84,7 +84,10 @@ export default function JobsPage() {
     workMode: serializeWorkModeFilter(selectedWorkModes),
     employmentType: serializeEmploymentTypeFilter(selectedEmploymentTypes),
     workRights: serializeWorkRightsFilter(selectedWorkRights),
-    targetRoles: serializeTargetRolesFilter(selectedTargetRoles),
+    targetRoles:
+      selectedTargetRoles.length > 0
+        ? serializeTargetRolesFilter(selectedTargetRoles)
+        : undefined,
     skills:
       selectedSkills.length > 0
         ? serializeSkillsFilter(selectedSkills)
@@ -117,7 +120,7 @@ export default function JobsPage() {
     setSelectedWorkRights(workRightsFromProfileValue(user.workRights));
     const profileRoles = targetRolesFromProfileValue(user.targetRoles);
     setTargetRoleOptions(profileRoles);
-    setSelectedTargetRoles(profileRoles);
+    setSelectedTargetRoles([]);
     setFiltersReady(true);
   }, [user]);
 

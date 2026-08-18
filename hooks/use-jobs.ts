@@ -73,8 +73,8 @@ function buildSearchUrl(filters: UseJobsFilters) {
     params.set("workRights", filters.workRights);
   }
 
-  if (filters.targetRoles !== undefined) {
-    params.set("targetRoles", filters.targetRoles);
+  if (filters.targetRoles?.trim()) {
+    params.set("targetRoles", filters.targetRoles.trim());
   }
 
   if (filters.skills) {

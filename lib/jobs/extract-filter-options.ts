@@ -9,6 +9,7 @@ import {
   workRightsOptions,
 } from "@/data/profile-options";
 import { jobMatchesSelectedInAppSources } from "@/lib/jobs/source-registry";
+import { getBestTargetRoleMatch } from "@/lib/jobs/target-role-matching";
 
 export type JobsLocationOption = {
   country: string;
@@ -506,6 +507,7 @@ export function jobMatchesSearchFilters(
     employmentType?: string | null;
     workRights?: string | null;
     skills?: string[];
+    targetRoles?: string[];
   }
 ) {
   const passesSource = jobMatchesSelectedInAppSources(
@@ -547,7 +549,19 @@ export function jobMatchesSearchFilters(
     return false;
   }
 
-  return jobMatchesSkillsFilter(job, options.skills ?? []);
+  if (!jobMatchesSkillsFilter(job, options.skills ?? [])) {
+    return false;
+  }
+
+  if (
+    options.targetRoles &&
+    options.targetRoles.length > 0 &&
+    getBestTargetRoleMatch(job, options.targetRoles).matchedKeywordCount === 0
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 export function hasRestrictiveMultiSelection(
