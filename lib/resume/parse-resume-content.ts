@@ -91,17 +91,3 @@ export function parseResumeContent(text: string): ResumeParseResult {
     excerpt: buildResumeExcerpt(normalizedText),
   };
 }
-
-export function mergeResumeSuggestions(
-  currentSkills: string[],
-  currentTargetRoles: string[],
-  suggestions: Pick<ResumeParseResult, "skills" | "targetRoles">
-) {
-  return {
-    skills: uniqueSkills([...currentSkills, ...suggestions.skills]),
-    targetRoles: uniqueTargetRoles([
-      ...currentTargetRoles,
-      ...suggestions.targetRoles,
-    ]),
-  };
-}

@@ -1,12 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 
 import type { ApplicationStatus, Job } from "@/types";
-import type { MockApplication } from "@/data/mock-applications";
+import type { Application } from "@/types/application";
 import { ApplicationCard } from "@/components/tracker/application-card";
 
 type ApplicationItem = {
   job: Job;
-  application: MockApplication;
+  application: Application;
 };
 
 type ApplicationColumnProps = {

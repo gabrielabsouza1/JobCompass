@@ -18,8 +18,8 @@ export default function NotFoundPage() {
         </h1>
 
         <p className="mx-auto mt-4 max-w-xl leading-7 text-slate-600">
-          The page you are looking for does not exist, was moved, or is not
-          available in this JobCompass mock yet.
+          The page you are looking for does not exist, was moved, or is no longer
+          available.
         </p>
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { MockApplication } from "@/data/mock-applications";
+import type { Application } from "@/types/application";
 import { useApplications } from "@/hooks/use-applications";
 import { useSavedJobs } from "@/hooks/use-saved-jobs";
 import {
@@ -22,7 +22,7 @@ import {
 
 type ApplicationItem = {
   job: Job;
-  application: MockApplication;
+  application: Application;
 };
 
 export function useApplicationTracker() {
