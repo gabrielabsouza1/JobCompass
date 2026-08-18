@@ -86,7 +86,7 @@ export function useApplications() {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return;
+      return null;
     }
 
     const { data, error } = await supabase
@@ -104,13 +104,76 @@ export function useApplications() {
 
     if (error) {
       console.error(error);
-      return;
+      return null;
     }
 
-    setApplications((currentApplications) => [
-      mapApplicationFromDatabase(data as ApplicationRow),
-      ...currentApplications,
-    ]);
+    const mapped = mapApplicationFromDatabase(data as ApplicationRow);
+
+    setApplications((currentApplications) => [mapped, ...currentApplications]);
+
+    return mapped;
+  }
+
+  async function updateApplication(
+    applicationId: string,
+    updates: Partial<
+      Pick<MockApplication, "status" | "nextStep" | "notes" | "appliedAt">
+    >
+  ) {
+    const supabase = createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return null;
+    }
+
+    const payload: Record<string, string | null> = {};
+
+    if (updates.status !== undefined) {
+      payload.status = updates.status;
+    }
+
+    if (updates.nextStep !== undefined) {
+      payload.next_step = updates.nextStep;
+    }
+
+    if (updates.notes !== undefined) {
+      payload.notes = updates.notes ?? null;
+    }
+
+    if (updates.appliedAt !== undefined) {
+      payload.applied_at = updates.appliedAt ?? null;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return null;
+    }
+
+    const { data, error } = await supabase
+      .from("applications")
+      .update(payload)
+      .eq("user_id", user.id)
+      .eq("id", applicationId)
+      .select("id, job_id, status, next_step, notes, applied_at")
+      .single();
+
+    if (error) {
+      console.error(error);
+      return null;
+    }
+
+    const mapped = mapApplicationFromDatabase(data as ApplicationRow);
+
+    setApplications((currentApplications) =>
+      currentApplications.map((application) =>
+        application.id === applicationId ? mapped : application
+      )
+    );
+
+    return mapped;
   }
 
   async function resetApplications() {
@@ -142,6 +205,7 @@ export function useApplications() {
     applications,
     isLoadingApplications,
     addApplication,
+    updateApplication,
     resetApplications,
   };
 }

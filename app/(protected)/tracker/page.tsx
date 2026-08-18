@@ -15,6 +15,7 @@ import { ApplicationColumn } from "@/components/tracker/application-column";
 import { useApplicationTracker } from "@/hooks/use-application-tracker";
 import { AppToast } from "@/components/ui/app-toast";
 import { useToast } from "@/hooks/use-toast";
+import type { ApplicationStatus } from "@/types";
 
 export default function TrackerPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -27,12 +28,38 @@ export default function TrackerPage() {
     applicationColumns,
     totalApplications,
     handleAddApplication,
+    updateApplication,
   } = useApplicationTracker();
 
-  function handleSaveApplication() {
-    handleAddApplication();
+  async function handleSaveApplication() {
+    const created = await handleAddApplication();
+
+    if (!created) {
+      showToast("Could not add application");
+      return;
+    }
+
     setIsAddModalOpen(false);
     showToast("Application added");
+  }
+
+  async function handleStatusChange(
+    applicationId: string,
+    status: ApplicationStatus
+  ) {
+    const updated = await updateApplication(applicationId, {
+      status,
+      appliedAt:
+        status === "Applied" || status === "Interview" || status === "Offer"
+          ? new Date().toISOString().slice(0, 10)
+          : undefined,
+    });
+
+    if (updated) {
+      showToast(`Status updated to ${status}`);
+    } else {
+      showToast("Could not update status");
+    }
   }
 
   return (
@@ -128,7 +155,13 @@ export default function TrackerPage() {
       <section className="overflow-x-auto pb-4">
         <div className="grid min-w-275 gap-4 xl:grid-cols-5">
           {applicationColumns.map((column) => (
-            <ApplicationColumn key={column.id} column={column} />
+            <ApplicationColumn
+              key={column.id}
+              column={column}
+              onStatusChange={(applicationId, status) => {
+                void handleStatusChange(applicationId, status);
+              }}
+            />
           ))}
         </div>
       </section>

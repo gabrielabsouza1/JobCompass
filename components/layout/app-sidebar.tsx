@@ -13,6 +13,9 @@ import {
   Bookmark,
 } from "lucide-react";
 
+import { useCurrentUser } from "@/hooks/use-current-user";
+import { calculateProfileCompletion } from "@/lib/profile/calculate-profile-completion";
+
 const navItems = [
   { label: "Home", href: "/dashboard", icon: Home },
   { label: "Jobs", href: "/jobs", icon: BriefcaseBusiness },
@@ -25,6 +28,16 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname();
+  const { user } = useCurrentUser();
+  const profileCompletion = calculateProfileCompletion({
+    countryName: user?.countryName,
+    cityName: user?.cityName,
+    workMode: user?.workMode,
+    employmentType: user?.employmentType,
+    workRights: user?.workRights,
+    targetRoles: user?.targetRoles,
+    skills: user?.skills,
+  });
 
   return (
     <aside className="hidden min-h-screen w-72 border-r border-slate-200 bg-white px-6 py-6 lg:flex lg:flex-col">
@@ -68,10 +81,15 @@ export function AppSidebar() {
         </p>
 
         <div className="mt-4 h-2 rounded-full bg-slate-100">
-          <div className="h-2 w-3/5 rounded-full bg-teal-600" />
+          <div
+            className="h-2 rounded-full bg-teal-600 transition-all"
+            style={{ width: `${profileCompletion}%` }}
+          />
         </div>
 
-        <p className="mt-3 text-sm font-medium text-teal-700">60% complete</p>
+        <p className="mt-3 text-sm font-medium text-teal-700">
+          {profileCompletion}% complete
+        </p>
       </div>
     </aside>
   );
