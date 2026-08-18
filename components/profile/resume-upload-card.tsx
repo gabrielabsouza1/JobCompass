@@ -1,32 +1,65 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FileText, Loader2, Trash2, Upload } from "lucide-react";
+import { FileText, Loader2, Sparkles, Trash2, Upload } from "lucide-react";
 
+import { ResumeParseSuggestions } from "@/components/profile/resume-parse-suggestions";
 import { Button } from "@/components/ui/button";
+import type { ResumeParseResult } from "@/lib/resume/parse-resume-content";
+import { patchProfile } from "@/lib/profile/patch-profile";
 
 type ResumeUploadCardProps = {
   resumeFilename?: string;
   resumeUploadedAt?: string | null;
+  currentSkills?: string[];
+  currentTargetRoles?: string[];
   onUploaded?: (payload: {
     resumePath: string;
     resumeFilename: string;
     resumeUploadedAt: string;
   }) => void;
   onRemoved?: () => void;
+  onProfileUpdated?: (payload: {
+    skills: string[];
+    targetRoles: string[];
+  }) => void;
   onError?: (message: string) => void;
+  onSuccess?: (message: string) => void;
 };
 
 export function ResumeUploadCard({
   resumeFilename,
   resumeUploadedAt,
+  currentSkills = [],
+  currentTargetRoles = [],
   onUploaded,
   onRemoved,
+  onProfileUpdated,
   onError,
+  onSuccess,
 }: ResumeUploadCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [parseResult, setParseResult] = useState<ResumeParseResult | null>(
+    null
+  );
+
+  async function handleParseResponse(data: {
+    parseResult?: ResumeParseResult | null;
+    error?: string;
+  }) {
+    if (data.parseResult) {
+      setParseResult(data.parseResult);
+      return;
+    }
+
+    if (data.error) {
+      onError?.(data.error);
+    }
+  }
 
   async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -36,6 +69,7 @@ export function ResumeUploadCard({
     }
 
     setIsUploading(true);
+    setParseResult(null);
 
     try {
       const formData = new FormData();
@@ -51,6 +85,7 @@ export function ResumeUploadCard({
         resumePath?: string;
         resumeFilename?: string;
         resumeUploadedAt?: string;
+        parseResult?: ResumeParseResult | null;
       };
 
       if (!response.ok) {
@@ -64,6 +99,9 @@ export function ResumeUploadCard({
           resumeUploadedAt: data.resumeUploadedAt,
         });
       }
+
+      await handleParseResponse(data);
+      onSuccess?.("Resume uploaded");
     } catch (error) {
       console.error(error);
       onError?.(
@@ -72,6 +110,69 @@ export function ResumeUploadCard({
     } finally {
       setIsUploading(false);
       event.target.value = "";
+    }
+  }
+
+  async function handleParseExistingResume() {
+    setIsParsing(true);
+
+    try {
+      const response = await fetch("/api/profile/resume/parse", {
+        method: "POST",
+      });
+
+      const data = (await response.json()) as {
+        error?: string;
+        parseResult?: ResumeParseResult;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Could not parse resume");
+      }
+
+      if (data.parseResult) {
+        setParseResult(data.parseResult);
+        onSuccess?.("Resume parsed");
+      }
+    } catch (error) {
+      console.error(error);
+      onError?.(
+        error instanceof Error ? error.message : "Could not parse resume"
+      );
+    } finally {
+      setIsParsing(false);
+    }
+  }
+
+  async function handleApplySuggestions(payload: {
+    skills: string[];
+    targetRoles: string[];
+  }) {
+    setIsApplying(true);
+
+    try {
+      const profile = await patchProfile({
+        skills: payload.skills,
+        targetRoles: payload.targetRoles,
+      });
+
+      if (!profile) {
+        throw new Error("Could not update profile");
+      }
+
+      onProfileUpdated?.({
+        skills: profile.skills,
+        targetRoles: profile.targetRoles,
+      });
+      setParseResult(null);
+      onSuccess?.("Profile updated from resume");
+    } catch (error) {
+      console.error(error);
+      onError?.(
+        error instanceof Error ? error.message : "Could not update profile"
+      );
+    } finally {
+      setIsApplying(false);
     }
   }
 
@@ -89,7 +190,9 @@ export function ResumeUploadCard({
         throw new Error(data.error ?? "Could not remove resume");
       }
 
+      setParseResult(null);
       onRemoved?.();
+      onSuccess?.("Resume removed");
     } catch (error) {
       console.error(error);
       onError?.(
@@ -101,6 +204,7 @@ export function ResumeUploadCard({
   }
 
   const hasResume = Boolean(resumeFilename);
+  const isBusy = isUploading || isRemoving || isParsing || isApplying;
 
   return (
     <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-6">
@@ -139,7 +243,7 @@ export function ResumeUploadCard({
             type="button"
             variant="outline"
             className="h-11 rounded-2xl border-slate-200 bg-white"
-            disabled={isUploading || isRemoving}
+            disabled={isBusy}
             onClick={() => inputRef.current?.click()}
           >
             {isUploading ? (
@@ -154,8 +258,27 @@ export function ResumeUploadCard({
             <Button
               type="button"
               variant="outline"
+              className="h-11 rounded-2xl border-slate-200 bg-white"
+              disabled={isBusy}
+              onClick={() => {
+                void handleParseExistingResume();
+              }}
+            >
+              {isParsing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="mr-2 h-4 w-4" />
+              )}
+              Extract skills
+            </Button>
+          ) : null}
+
+          {hasResume ? (
+            <Button
+              type="button"
+              variant="outline"
               className="h-11 rounded-2xl border-red-200 bg-white text-red-700 hover:bg-red-50"
-              disabled={isUploading || isRemoving}
+              disabled={isBusy}
               onClick={() => {
                 void handleRemoveResume();
               }}
@@ -170,6 +293,19 @@ export function ResumeUploadCard({
           ) : null}
         </div>
       </div>
+
+      {parseResult ? (
+        <ResumeParseSuggestions
+          parseResult={parseResult}
+          currentSkills={currentSkills}
+          currentTargetRoles={currentTargetRoles}
+          isApplying={isApplying}
+          onApply={(payload) => {
+            void handleApplySuggestions(payload);
+          }}
+          onDismiss={() => setParseResult(null)}
+        />
+      ) : null}
     </div>
   );
 }

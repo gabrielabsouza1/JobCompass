@@ -81,7 +81,7 @@ const steps = [
   {
     id: "resume",
     title: "Upload your resume",
-    description: "Optional — improves future matching features.",
+    description: "Optional — we can suggest skills and target roles from it.",
     icon: FileText,
   },
 ] as const;
@@ -770,6 +770,8 @@ export function OnboardingWizard() {
               <ResumeUploadCard
                 resumeFilename={user?.resumeFilename}
                 resumeUploadedAt={user?.resumeUploadedAt}
+                currentSkills={user?.skills ?? []}
+                currentTargetRoles={user?.targetRoles ?? []}
                 onUploaded={(payload) => {
                   if (!user) {
                     return;
@@ -780,6 +782,17 @@ export function OnboardingWizard() {
                     resumePath: payload.resumePath,
                     resumeFilename: payload.resumeFilename,
                     resumeUploadedAt: payload.resumeUploadedAt,
+                  });
+                }}
+                onProfileUpdated={(payload) => {
+                  if (!user) {
+                    return;
+                  }
+
+                  applyProfile({
+                    ...user,
+                    skills: payload.skills,
+                    targetRoles: payload.targetRoles,
                   });
                 }}
                 onRemoved={() => {

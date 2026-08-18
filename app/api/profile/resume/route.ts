@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireApiUser } from "@/lib/auth/require-api-user";
+import { parseResumeFile } from "@/lib/resume/parse-resume-file";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest) {
   }
 
   const uploadedAt = new Date().toISOString();
+  const parseResult = await parseResumeFile(fileBuffer, file.type);
 
   const { data: updatedProfile, error: updateError } = await supabase
     .from("profiles")
@@ -93,6 +95,7 @@ export async function POST(request: NextRequest) {
     resumePath: updatedProfile?.resume_path ?? storagePath,
     resumeFilename: updatedProfile?.resume_filename ?? file.name,
     resumeUploadedAt: updatedProfile?.resume_uploaded_at ?? uploadedAt,
+    parseResult,
   });
 }
 
