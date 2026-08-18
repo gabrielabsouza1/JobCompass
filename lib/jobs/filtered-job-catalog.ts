@@ -31,10 +31,44 @@ type JobSearchFilterOptions = {
   targetRoles?: string[];
 };
 
-type FetchAdzunaBatch = (
+type FetchJobBatch = (
   page: number,
   perPage: number
 ) => Promise<{ jobs: Job[]; total: number }>;
+
+function enrichJobsWithMatchScores(
+  jobs: Job[],
+  filterOptions: JobSearchFilterOptions,
+  profileContext: ProfileMatchContext
+) {
+  return jobs
+    .filter((job) => jobMatchesSearchFilters(job, filterOptions))
+    .map((job) => {
+      const skillMatch = getJobSkillMatchDetails(job, profileContext);
+
+      return {
+        ...job,
+        matchScore: calculateMatchScore(job, profileContext),
+        matchedProfileSkills: skillMatch.matchedSkills,
+        missingProfileSkills: skillMatch.missingSkills,
+      };
+    });
+}
+
+function appendUniqueJobs(
+  jobs: Job[],
+  catalog: Job[],
+  seenJobIds: Set<string>
+) {
+  for (const job of jobs) {
+    if (seenJobIds.has(job.id)) {
+      continue;
+    }
+
+    seenJobIds.add(job.id);
+    catalog.push(job);
+  }
+}
 
 function sortJobsByBestMatch(
   jobs: Job[],
@@ -65,10 +99,10 @@ function sortJobsByDatePosted(jobs: Job[]) {
   );
 }
 
-function estimateFilteredTotal(
+function estimatePaginatedTotal(
   filteredIndex: number,
   scannedRaw: number,
-  adzunaTotal: number,
+  providerTotal: number,
   scannedAll: boolean
 ) {
   if (scannedAll) {
@@ -76,16 +110,17 @@ function estimateFilteredTotal(
   }
 
   if (scannedRaw <= 0 || filteredIndex <= 0) {
-    return adzunaTotal;
+    return providerTotal;
   }
 
-  const estimated = Math.round((filteredIndex / scannedRaw) * adzunaTotal);
+  const estimated = Math.round((filteredIndex / scannedRaw) * providerTotal);
 
-  return Math.min(adzunaTotal, Math.max(filteredIndex, estimated));
+  return Math.min(providerTotal, Math.max(filteredIndex, estimated));
 }
 
 export async function buildFilteredJobPage(
-  fetchBatch: FetchAdzunaBatch,
+  fetchBatch: FetchJobBatch | null,
+  prefetchedJobs: Job[],
   filterOptions: JobSearchFilterOptions,
   profileContext: ProfileMatchContext,
   activeTargetRoles: string[],
@@ -95,45 +130,45 @@ export async function buildFilteredJobPage(
 ) {
   const catalog: Job[] = [];
   const seenJobIds = new Set<string>();
-  let adzunaTotal = 0;
-  let adzunaPage = 1;
+  let providerTotal = 0;
+  let providerPage = 1;
   let scannedAll = false;
   let scannedRaw = 0;
   const neededJobs = page * perPage;
   const maxBatches = Math.min(MAX_ADZUNA_BATCHES, Math.max(2, page + 1));
 
-  while (adzunaPage <= maxBatches) {
-    const { jobs, total } = await fetchBatch(adzunaPage, ADZUNA_BATCH_SIZE);
-    adzunaTotal = total;
+  const prefetchedFiltered = enrichJobsWithMatchScores(
+    prefetchedJobs,
+    filterOptions,
+    profileContext
+  );
+  appendUniqueJobs(prefetchedFiltered, catalog, seenJobIds);
+  const prefetchedFilteredCount = prefetchedFiltered.length;
+
+  if (!fetchBatch) {
+    scannedAll = true;
+    scannedRaw = prefetchedJobs.length;
+    providerTotal = prefetchedJobs.length;
+  }
+
+  while (fetchBatch && providerPage <= maxBatches) {
+    const { jobs, total } = await fetchBatch(providerPage, ADZUNA_BATCH_SIZE);
+    providerTotal = total;
 
     if (jobs.length === 0) {
       scannedAll = true;
       break;
     }
 
-    scannedRaw = Math.min(adzunaPage * ADZUNA_BATCH_SIZE, total);
+    scannedRaw = Math.min(providerPage * ADZUNA_BATCH_SIZE, total);
 
-    const filtered = jobs
-      .filter((job) => jobMatchesSearchFilters(job, filterOptions))
-      .map((job) => {
-        const skillMatch = getJobSkillMatchDetails(job, profileContext);
+    const filtered = enrichJobsWithMatchScores(
+      jobs,
+      filterOptions,
+      profileContext
+    );
 
-        return {
-          ...job,
-          matchScore: calculateMatchScore(job, profileContext),
-          matchedProfileSkills: skillMatch.matchedSkills,
-          missingProfileSkills: skillMatch.missingSkills,
-        };
-      });
-
-    for (const job of filtered) {
-      if (seenJobIds.has(job.id)) {
-        continue;
-      }
-
-      seenJobIds.add(job.id);
-      catalog.push(job);
-    }
+    appendUniqueJobs(filtered, catalog, seenJobIds);
 
     if (catalog.length >= neededJobs) {
       break;
@@ -144,7 +179,7 @@ export async function buildFilteredJobPage(
       break;
     }
 
-    adzunaPage += 1;
+    providerPage += 1;
   }
 
   const targetStart = (page - 1) * perPage;
@@ -153,12 +188,16 @@ export async function buildFilteredJobPage(
       ? sortJobsByDatePosted(catalog)
       : sortJobsByBestMatch(catalog, activeTargetRoles);
   const pageJobs = sortedCatalog.slice(targetStart, targetStart + perPage);
-  const totalFiltered = estimateFilteredTotal(
-    catalog.length,
+  const paginatedFilteredCount = catalog.length - prefetchedFilteredCount;
+  const paginatedEstimate = estimatePaginatedTotal(
+    paginatedFilteredCount,
     scannedRaw,
-    adzunaTotal,
+    providerTotal,
     scannedAll
   );
+  const totalFiltered = scannedAll
+    ? catalog.length
+    : prefetchedFilteredCount + paginatedEstimate;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / perPage));
 
   return {
@@ -167,6 +206,6 @@ export async function buildFilteredJobPage(
     totalPages,
     page,
     perPage,
-    adzunaTotal,
+    providerTotal,
   };
 }
