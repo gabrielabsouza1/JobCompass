@@ -11,6 +11,10 @@ import {
 } from "@/lib/jobs/extract-filter-options";
 import { buildFilteredJobPage } from "@/lib/jobs/filtered-job-catalog";
 import { getAdzunaJobs } from "@/lib/jobs/providers/adzuna-provider";
+import {
+  buildJoobleLocationFromFilters,
+  getJoobleJobs,
+} from "@/lib/jobs/providers/jooble-provider";
 import { getRemotiveJobs } from "@/lib/jobs/providers/remotive-provider";
 import {
   parseSkillsFromProfile,
@@ -21,6 +25,7 @@ import {
   getAdzunaCountryByName,
 } from "@/lib/jobs/adzuna-countries";
 import { jobMatchesSelectedInAppSources, isInAppSourceEnabled } from "@/lib/jobs/source-registry";
+import type { Job } from "@/types";
 
 async function searchAdzunaJobs(
   countryCode: string,
@@ -257,14 +262,40 @@ export async function GET(request: NextRequest) {
   };
 
   const adzunaEnabled = isInAppSourceEnabled(selectedSourceIds, "adzuna");
+  const joobleEnabled = isInAppSourceEnabled(selectedSourceIds, "jooble");
   const remotiveEnabled = isInAppSourceEnabled(selectedSourceIds, "remotive");
 
-  const remotiveJobsPromise = remotiveEnabled
-    ? getRemotiveJobs({
+  const joobleLocation = buildJoobleLocationFromFilters({
+    country,
+    state,
+    city,
+    fallbackCountryName: resolvedProfile.country_name,
+  });
+
+  const prefetchedJobsPromises: Promise<Job[]>[] = [];
+
+  if (joobleEnabled) {
+    prefetchedJobsPromises.push(
+      getJoobleJobs({
+        keywords: query,
+        location: joobleLocation,
+        countryCode: profileCountryCode,
+      }).then((result) => result.jobs)
+    );
+  }
+
+  if (remotiveEnabled) {
+    prefetchedJobsPromises.push(
+      getRemotiveJobs({
         search: query,
         limit: 500,
       }).then((result) => result.jobs)
-    : Promise.resolve([]);
+    );
+  }
+
+  const prefetchedJobs = (
+    await Promise.all(prefetchedJobsPromises)
+  ).flat();
 
   const catalogPage = await buildFilteredJobPage(
     adzunaEnabled
@@ -275,7 +306,7 @@ export async function GET(request: NextRequest) {
             perPage: batchSize,
           })
       : null,
-    await remotiveJobsPromise,
+    prefetchedJobs,
     jobFilterOptions,
     profileMatchContext,
     rankingTargetRoles,
@@ -295,6 +326,16 @@ export async function GET(request: NextRequest) {
       workMode: null,
       page: 1,
       perPage: 50,
+    });
+
+    sampleJobs.push(...jobs);
+  }
+
+  if (joobleEnabled) {
+    const { jobs } = await getJoobleJobs({
+      location: joobleLocation,
+      countryCode: profileCountryCode,
+      maxPages: 1,
     });
 
     sampleJobs.push(...jobs);

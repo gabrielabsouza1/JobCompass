@@ -27,13 +27,13 @@ export const JOB_SOURCE_REGISTRY: JobSourceMeta[] = [
   {
     id: "jooble",
     name: "Jooble",
-    description: "Aggregated job listings — coming in a future release.",
+    description: "Aggregated Australian job listings shown inside JobCompass.",
     type: "In-app results",
-    status: "Coming soon",
+    status: "Connected",
     category: "API",
-    integration: "planned",
-    recommended: false,
-    selectable: false,
+    integration: "in_app",
+    recommended: true,
+    selectable: true,
   },
   {
     id: "remotive",
@@ -103,7 +103,13 @@ export const JOB_SOURCE_REGISTRY: JobSourceMeta[] = [
   },
 ];
 
-export const DEFAULT_SELECTED_SOURCE_IDS = ["adzuna", "remotive", "seek", "linkedin"];
+export const DEFAULT_SELECTED_SOURCE_IDS = [
+  "adzuna",
+  "jooble",
+  "remotive",
+  "seek",
+  "linkedin",
+];
 
 const IN_APP_SOURCE_IDS = new Set(
   JOB_SOURCE_REGISTRY.filter((source) => source.integration === "in_app").map(
